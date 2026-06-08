@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: bronze
+    database: "{{ env_var('DATABRICKS_CATALOG', 'nba_dev') }}"
+    schema: bronze
+    description: >
+      Raw, as-ingested NBA Stats API result sets. One table per
+      (endpoint, result_set); all source columns typed as STRING plus lineage
+      columns. In Phase 1 these are populated via the SQL-warehouse sink; the
+      target path is Auto Loader over the ops.landing volume.
+    tables:
+      - name: static_teams__Teams
+        description: Static team reference data from nba_api.stats.static.teams.
+      - name: commonallplayers__CommonAllPlayers
+        description: Players active in a season (commonallplayers endpoint).
+      - name: leaguegamelog__LeagueGameLog
+        description: One row per team per game for a season (leaguegamelog endpoint).

@@ -1,0 +1,69 @@
+version: 2
+
+models:
+  - name: dim_date
+    columns:
+      - name: date_key
+        tests: [unique, not_null]
+
+  - name: dim_season
+    columns:
+      - name: season_key
+        tests: [unique, not_null]
+      - name: season_type
+        tests:
+          - accepted_values:
+              values: ['Pre Season', 'Regular Season', 'All-Star', 'Playoffs', 'Play-In', 'Unknown']
+
+  - name: dim_team
+    columns:
+      - name: team_sk
+        tests: [unique, not_null]
+      - name: team_id
+        tests: [not_null]
+
+  - name: dim_player
+    columns:
+      - name: player_sk
+        tests: [unique, not_null]
+      - name: player_id
+        tests: [not_null]
+
+  - name: dim_game
+    columns:
+      - name: game_sk
+        tests: [unique, not_null]
+      - name: date_key
+        tests:
+          - relationships: { to: ref('dim_date'), field: date_key }
+      - name: season_key
+        tests:
+          - relationships: { to: ref('dim_season'), field: season_key }
+      - name: home_team_sk
+        tests:
+          - relationships: { to: ref('dim_team'), field: team_sk }
+      - name: away_team_sk
+        tests:
+          - relationships: { to: ref('dim_team'), field: team_sk }
+
+  - name: fact_team_game
+    description: One row per team per game.
+    columns:
+      - name: team_game_sk
+        tests: [unique, not_null]
+      - name: game_sk
+        tests:
+          - relationships: { to: ref('dim_game'), field: game_sk }
+      - name: team_sk
+        tests:
+          - not_null
+          - relationships: { to: ref('dim_team'), field: team_sk }
+      - name: date_key
+        tests:
+          - relationships: { to: ref('dim_date'), field: date_key }
+      - name: season_key
+        tests:
+          - relationships: { to: ref('dim_season'), field: season_key }
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [game_id, team_id]

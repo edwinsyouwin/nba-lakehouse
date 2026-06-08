@@ -1,0 +1,25 @@
+version: 2
+
+models:
+  - name: stg_teams
+    description: Typed team reference (one row per team).
+    columns:
+      - name: team_id
+        tests: [unique, not_null]
+
+  - name: stg_players
+    description: Typed players active in the loaded season.
+    columns:
+      - name: player_id
+        tests: [unique, not_null]
+
+  - name: stg_team_game
+    description: One typed row per team per game.
+    columns:
+      - name: game_id
+        tests: [not_null]
+      - name: team_id
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [game_id, team_id]

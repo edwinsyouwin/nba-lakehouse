@@ -1,0 +1,35 @@
+-- One row per team per game (the grain of fact_team_game).
+with src as (select * from {{ source('bronze', 'leaguegamelog__LeagueGameLog') }})
+select
+    cast(GAME_ID as string)               as game_id,
+    cast(TEAM_ID as bigint)               as team_id,
+    cast(TEAM_ABBREVIATION as string)     as team_abbreviation,
+    cast(SEASON_ID as string)             as season_id,
+    cast(GAME_DATE as date)               as game_date,
+    cast(MATCHUP as string)               as matchup,
+    -- "ABC vs. XYZ" => home game; "ABC @ XYZ" => away game
+    case when MATCHUP like '%vs.%' then true else false end as is_home,
+    trim(right(MATCHUP, 3))               as opponent_abbreviation,
+    cast(WL as string)                    as win_loss,
+    case when WL = 'W' then 1 when WL = 'L' then 0 end as win_flag,
+    cast(MIN as int)                      as team_minutes,
+    cast(PTS as int)                      as points,
+    cast(FGM as int)                      as fgm,
+    cast(FGA as int)                      as fga,
+    cast(FG_PCT as double)                as fg_pct,
+    cast(FG3M as int)                     as fg3m,
+    cast(FG3A as int)                     as fg3a,
+    cast(FG3_PCT as double)               as fg3_pct,
+    cast(FTM as int)                      as ftm,
+    cast(FTA as int)                      as fta,
+    cast(FT_PCT as double)                as ft_pct,
+    cast(OREB as int)                     as oreb,
+    cast(DREB as int)                     as dreb,
+    cast(REB as int)                      as reb,
+    cast(AST as int)                      as ast,
+    cast(STL as int)                      as stl,
+    cast(BLK as int)                      as blk,
+    cast(TOV as int)                      as tov,
+    cast(PF as int)                       as pf,
+    cast(PLUS_MINUS as double)            as plus_minus
+from src
