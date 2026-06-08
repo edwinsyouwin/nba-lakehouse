@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python-tests:
+    name: Python tests (registry)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install package + test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install nba_api pytest
+          pip install -e .
+      - name: Run pytest
+        run: pytest -q
+
+  dbt:
+    name: dbt deps + parse (offline)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dbt
+    env:
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt
+      # Dummy values — `dbt parse` compiles the project but does not connect.
+      DATABRICKS_HOST: dummy
+      DATABRICKS_HTTP_PATH: /sql/1.0/warehouses/x
+      DATABRICKS_TOKEN: dummy
+      DATABRICKS_CATALOG: nba_dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dbt
+        run: |
+          python -m pip install --upgrade pip
+          pip install dbt-databricks
+      - name: Create profiles.yml from template
+        run: cp profiles.example.yml profiles.yml
+      - name: dbt deps
+        run: dbt deps
+      - name: dbt parse
+        run: dbt parse --no-partial-parse
+
+  bundle-validate:
+    name: Databricks bundle validate
+    runs-on: ubuntu-latest
+    # Requires repo secrets DATABRICKS_HOST + DATABRICKS_TOKEN (token needs the
+    # `workspace` scope, or use an OAuth service principal). Skips cleanly if unset.
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for credentials
+        id: creds
+        run: |
+          if [ -z "$DATABRICKS_TOKEN" ]; then
+            echo "Secrets not set — skipping bundle validate."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.creds.outputs.skip != 'true'
+        uses: databricks/setup-cli@main
+      - if: steps.creds.outputs.skip != 'true'
+        run: databricks bundle validate -t dev
