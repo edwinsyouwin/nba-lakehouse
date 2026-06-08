@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Poetry
+# (keep poetry.lock committed)
+
+# dbt
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+.user.yml
+profiles.yml
+
+# Databricks
+.databricks/
+.databricks-login.json
+
+# Secrets / env
+.env
+*.pem
+.databrickscfg
+
+# macOS / editors
+.DS_Store
+.vscode/
+.idea/

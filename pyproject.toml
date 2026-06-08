@@ -1,0 +1,34 @@
+[tool.poetry]
+name = "nba-lakehouse"
+version = "0.1.0"
+description = "A governed NBA data warehouse on the Databricks Lakehouse, built on nba_api."
+authors = ["Edwin Lee <edwin.t.lee@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "nba_warehouse", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+nba_api = "^1.10"          # source-of-truth for NBA Stats API endpoint contracts
+requests = "^2.32"
+
+[tool.poetry.group.dbt.dependencies]
+dbt-core = "^1.9"
+dbt-databricks = "^1.9"
+
+[tool.poetry.group.databricks.dependencies]
+databricks-sdk = "^0.40"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+ruff = "^0.8"
+sqlfluff = "^3.3"
+pre-commit = "^4.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
