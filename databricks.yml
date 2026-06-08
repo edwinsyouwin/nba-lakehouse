@@ -1,0 +1,36 @@
+# Databricks Asset Bundle — root config.
+# Deploys catalog objects, the Bronze pipeline, the dbt job, and dashboards.
+#   databricks bundle validate
+#   databricks bundle deploy --target dev
+bundle:
+  name: nba-lakehouse
+
+include:
+  - resources/*.yml
+
+variables:
+  warehouse_id:
+    description: Serverless SQL warehouse used by the dbt task and dashboards.
+    default: 5371a1d00cc91d58
+  catalog:
+    description: Target Unity Catalog (overridden per target).
+    default: nba_dev
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://dbc-16b7e00d-e6b0.cloud.databricks.com
+    variables:
+      catalog: nba_dev
+
+  prod:
+    mode: production
+    workspace:
+      host: https://dbc-16b7e00d-e6b0.cloud.databricks.com
+      # In prod the bundle runs as a service principal (no PAT).
+    variables:
+      catalog: nba
+    # run_as:
+    #   service_principal_name: <sp-application-id>   # set when the SP is created

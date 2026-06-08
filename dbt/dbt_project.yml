@@ -1,0 +1,39 @@
+name: nba_lakehouse
+version: "0.1.0"
+config-version: 2
+
+profile: nba_lakehouse
+
+model-paths: ["models"]
+snapshot-paths: ["snapshots"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+# Schema = medallion layer (see macros/generate_schema_name.sql, which strips
+# dbt's default <target>_<schema> prefixing so models land in clean schemas).
+models:
+  nba_lakehouse:
+    staging:
+      +materialized: view
+      +schema: silver
+    intermediate:
+      +materialized: ephemeral
+      +schema: silver
+    marts:
+      core:
+        +materialized: table
+        +schema: gold
+      analytics:
+        +materialized: table
+        +schema: gold
+
+snapshots:
+  nba_lakehouse:
+    +target_schema: silver
+
+seeds:
+  nba_lakehouse:
+    +schema: silver
