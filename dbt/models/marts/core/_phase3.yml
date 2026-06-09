@@ -1,0 +1,29 @@
+version: 2
+
+models:
+  - name: fact_player_season
+    description: One row per player per season per team (regular season totals).
+    columns:
+      - name: player_season_sk
+        tests: [unique, not_null]
+      - name: player_sk
+        tests:
+          - relationships: { to: ref('dim_player'), field: player_sk }
+      - name: team_sk
+        tests:
+          - relationships: { to: ref('dim_team'), field: team_sk }
+      - name: season_key
+        tests:
+          - relationships: { to: ref('dim_season'), field: season_key }
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [player_id, season, team_id]
+
+  - name: mart_player_team_tenure
+    description: Seasons a player spent with each team (player-team grain).
+    columns:
+      - name: seasons
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [player_id, team_id]

@@ -22,3 +22,13 @@ sources:
         description: Per-player advanced box score for a game (boxscoreadvancedv3).
       - name: playbyplayv3__PlayByPlay
         description: Per-event play-by-play for a game (carries shot coordinates).
+      - name: playercareerstats__SeasonTotalsRegularSeason
+        description: One row per player per season per team (playercareerstats).
+      - name: commonteamroster__CommonTeamRoster
+        description: One row per player per team-season — roster with jersey #, position, height/weight, college, age, experience (commonteamroster).
+      - name: commonteamroster__Coaches
+        description: >
+          One row per coach/trainer per team-season — head coach, assistant
+          coaches, and trainers (commonteamroster, Coaches result set). NBA Stats
+          coverage is uneven across seasons; some team-seasons omit the head
+          coach or return only trainers.

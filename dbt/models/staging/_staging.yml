@@ -23,3 +23,28 @@ models:
     tests:
       - dbt_utils.unique_combination_of_columns:
           combination_of_columns: [game_id, team_id]
+
+  - name: stg_team_roster
+    description: One typed row per player per team-season (commonteamroster).
+    columns:
+      - name: team_id
+        tests: [not_null]
+      - name: player_id
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [team_id, season, player_id]
+
+  - name: stg_team_coach
+    description: >
+      One typed row per coach/trainer per team-season (commonteamroster Coaches).
+      Flags head vs. assistant via coach_type. NBA Stats coverage is uneven, so
+      no test asserts exactly one head coach per team-season.
+    columns:
+      - name: team_id
+        tests: [not_null]
+      - name: coach_id
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [team_id, season, coach_id]

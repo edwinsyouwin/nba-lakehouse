@@ -23,7 +23,10 @@ typed as (
         try_cast(xLegacy as double)             as x_legacy,
         try_cast(yLegacy as double)             as y_legacy
     from src
-)
+),
+-- collapse identical duplicate-load rows (tolerant of at-least-once Bronze),
+-- while preserving genuinely-distinct events that share an actionNumber
+deduped as (select distinct * from typed)
 select
     *,
     row_number() over (
@@ -31,4 +34,4 @@ select
         order by description nulls last, shot_result nulls last,
                  team_id nulls last, player_id nulls last
     ) as action_seq
-from typed
+from deduped

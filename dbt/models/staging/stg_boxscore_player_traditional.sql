@@ -30,3 +30,5 @@ select
     try_cast(points as int)                     as points,
     try_cast(plusMinusPoints as double)         as plus_minus
 from src
+-- one row per game-player (tolerant of at-least-once Bronze loads)
+qualify row_number() over (partition by gameId, personId order by points desc nulls last) = 1

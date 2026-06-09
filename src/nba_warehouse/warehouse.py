@@ -88,11 +88,15 @@ def load_result_set(
     params: dict,
     run_id: str,
     chunk_size: int = 500,
+    replace: bool = True,
 ) -> int:
     """Idempotently load one result-set DataFrame into bronze.<endpoint>__<result_set>.
 
-    Idempotency: delete any rows previously landed for this (endpoint, param_hash)
-    slice, then insert. Re-running yields identical Bronze content.
+    Idempotency: when ``replace`` is set, delete any rows previously landed for this
+    (endpoint, param_hash) slice before inserting, so re-running yields identical
+    Bronze content. On a fresh backfill the caller's ``is_done`` gate guarantees the
+    slice isn't present yet, so pass ``replace=False`` to skip the Delta DELETE — it
+    is the dominant per-slice cost once Bronze tables grow.
     """
     table = f"{endpoint}__{result_set}"
     source_cols = [str(c) for c in df.columns]
@@ -102,11 +106,12 @@ def load_result_set(
     ingested_at = datetime.now(timezone.utc).isoformat()
     params_json = json.dumps(params, sort_keys=True, default=str)
 
-    exec_sql(
-        cur,
-        f"DELETE FROM bronze.`{table}` WHERE _endpoint = {_sql_literal(endpoint)} "
-        f"AND _param_hash = {_sql_literal(ph)}",
-    )
+    if replace:
+        exec_sql(
+            cur,
+            f"DELETE FROM bronze.`{table}` WHERE _endpoint = {_sql_literal(endpoint)} "
+            f"AND _param_hash = {_sql_literal(ph)}",
+        )
     if df.empty:
         return 0
 

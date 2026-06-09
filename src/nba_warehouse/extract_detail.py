@@ -39,8 +39,33 @@ def recent_game_ids(cur, limit: int) -> list[str]:
     return [r[0] for r in cur.fetchall()]
 
 
+def season_game_ids(cur, season: str) -> list[str]:
+    """All game_ids (Regular Season + Playoffs) for one season, e.g. '2015-16'.
+
+    Reads from dim_game, so the spine for that season must already be loaded.
+    """
+    cur.execute(
+        "SELECT g.game_id FROM gold.dim_game g "
+        "JOIN gold.dim_season s USING (season_key) "
+        f"WHERE s.season = '{season}' ORDER BY g.game_date"
+    )
+    return [r[0] for r in cur.fetchall()]
+
+
+def done_slices(cur, endpoints: list[str]) -> set[tuple[str, str]]:
+    """All completed (endpoint, param_hash) pairs for the given endpoints, fetched
+    in one query so resume-skips are in-memory set lookups, not per-slice SELECTs."""
+    inlist = ", ".join("'" + e + "'" for e in endpoints)
+    cur.execute(
+        f"SELECT endpoint, param_hash FROM ops.crawl_state "
+        f"WHERE status = 'done' AND endpoint IN ({inlist})"
+    )
+    return {(r[0], r[1]) for r in cur.fetchall()}
+
+
 def run(*, game_ids: list[str] | None = None, recent: int | None = None,
-        run_id: str | None = None, force: bool = False) -> dict:
+        seasons: list[str] | None = None, run_id: str | None = None,
+        force: bool = False) -> dict:
     run_id = run_id or uuid.uuid4().hex[:12]
     summary: dict[str, int] = {}
 
@@ -51,14 +76,21 @@ def run(*, game_ids: list[str] | None = None, recent: int | None = None,
         ids = list(game_ids or [])
         if recent:
             ids += recent_game_ids(cur, recent)
+        for season in (seasons or []):
+            ids += season_game_ids(cur, season)
         ids = sorted(set(ids))
-        summary["games"] = len(ids)
+        total = len(ids)
+        summary["games"] = total
 
-        for gid in ids:
+        # Prefetch completed slices once so resuming a large backfill is a set
+        # lookup per slice instead of an is_done() query per slice.
+        done = set() if force else done_slices(cur, list(DETAIL_ENDPOINTS))
+
+        for i, gid in enumerate(ids, 1):
             for endpoint, (klass, result_set, df_idx) in DETAIL_ENDPOINTS.items():
                 params = {"game_id": gid}
                 ph = wh.param_hash(params)
-                if not force and wh.is_done(cur, endpoint, ph):
+                if not force and (endpoint, ph) in done:
                     summary[f"{endpoint}:skipped"] = summary.get(f"{endpoint}:skipped", 0) + 1
                     continue
                 time.sleep(API_DELAY_SECONDS)
@@ -70,8 +102,11 @@ def run(*, game_ids: list[str] | None = None, recent: int | None = None,
                     df=df,
                     params=params,
                     run_id=run_id,
+                    replace=force,
                 )
                 wh.mark_state(cur, endpoint, ph, gid, n, "done")
                 summary[endpoint] = summary.get(endpoint, 0) + n
+            if i % 50 == 0 or i == total:
+                print(f"[detail] {i}/{total} games", flush=True)
 
     return summary

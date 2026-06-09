@@ -56,6 +56,7 @@ def run(seasons: list[str], *, run_id: str | None = None, force: bool = False) -
                 df=df,
                 params=params,
                 run_id=run_id,
+                replace=force,
             )
             wh.mark_state(cur, endpoint, ph, season_label, n, "done")
             summary[label] = summary.get(label, 0) + n

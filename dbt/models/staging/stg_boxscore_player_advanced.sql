@@ -19,3 +19,5 @@ select
     try_cast(possessions as double)                  as possessions,
     try_cast(PIE as double)                          as pie
 from src
+-- one row per game-player (tolerant of at-least-once Bronze loads)
+qualify row_number() over (partition by gameId, personId order by PIE desc nulls last) = 1
