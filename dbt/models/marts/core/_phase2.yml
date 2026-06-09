@@ -1,0 +1,58 @@
+version: 2
+
+models:
+  - name: dim_shot_zone
+    columns:
+      - name: shot_zone_key
+        tests: [unique, not_null]
+      - name: shot_zone
+        tests: [unique, not_null]
+
+  - name: fact_player_game
+    description: One row per player per game (traditional + advanced box score).
+    columns:
+      - name: player_game_sk
+        tests: [unique, not_null]
+      - name: game_sk
+        tests:
+          - relationships: { to: ref('dim_game'), field: game_sk }
+      - name: team_sk
+        tests:
+          - relationships: { to: ref('dim_team'), field: team_sk }
+      - name: player_sk
+        tests:
+          - relationships: { to: ref('dim_player'), field: player_sk }
+      - name: date_key
+        tests:
+          - relationships: { to: ref('dim_date'), field: date_key }
+      - name: season_key
+        tests:
+          - relationships: { to: ref('dim_season'), field: season_key }
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [game_id, player_id]
+
+  - name: fact_play_by_play
+    description: One row per play-by-play event.
+    columns:
+      - name: event_sk
+        tests: [unique, not_null]
+      - name: game_sk
+        tests:
+          - relationships: { to: ref('dim_game'), field: game_sk }
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [game_id, action_number, action_seq]
+
+  - name: fact_shot
+    description: One row per field-goal attempt (derived from play-by-play).
+    columns:
+      - name: shot_sk
+        tests: [unique, not_null]
+      - name: game_sk
+        tests:
+          - relationships: { to: ref('dim_game'), field: game_sk }
+      - name: shot_zone_key
+        tests:
+          - not_null
+          - relationships: { to: ref('dim_shot_zone'), field: shot_zone_key }

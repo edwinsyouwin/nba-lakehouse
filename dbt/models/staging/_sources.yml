@@ -16,3 +16,9 @@ sources:
         description: Players active in a season (commonallplayers endpoint).
       - name: leaguegamelog__LeagueGameLog
         description: One row per team per game for a season (leaguegamelog endpoint).
+      - name: boxscoretraditionalv3__PlayerStats
+        description: Per-player traditional box score for a game (boxscoretraditionalv3).
+      - name: boxscoreadvancedv3__PlayerStats
+        description: Per-player advanced box score for a game (boxscoreadvancedv3).
+      - name: playbyplayv3__PlayByPlay
+        description: Per-event play-by-play for a game (carries shot coordinates).

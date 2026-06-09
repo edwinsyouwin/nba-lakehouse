@@ -1,0 +1,45 @@
+version: 2
+
+sources:
+  - name: derived
+    database: "{{ env_var('DATABRICKS_CATALOG', 'nba_dev') }}"
+    schema: gold
+    description: Tables materialized outside dbt by nba_warehouse jobs.
+    tables:
+      - name: analytics_team_elo
+        description: >
+          Proprietary team Elo power ratings — one row per team per game, with
+          pre-game rating, win expectation, and post-game rating. Derived IP
+          computed from public game results (see src/nba_warehouse/elo.py).
+        columns:
+          - name: team_game_sk
+            tests:
+              - unique
+              - not_null
+              - relationships: { to: ref('fact_team_game'), field: team_game_sk }
+          - name: team_id
+            tests: [not_null]
+          - name: elo_pre
+            tests: [not_null]
+          - name: elo_post
+            tests: [not_null]
+          - name: win_expected
+            description: Pre-game win probability implied by Elo (incl. home court).
+            tests:
+              - dbt_utils.accepted_range: { min_value: 0, max_value: 1 }
+        tests:
+          - dbt_utils.unique_combination_of_columns:
+              combination_of_columns: [game_id, team_id]
+
+models:
+  - name: mart_team_four_factors
+    description: Team efficiency and Dean Oliver Four Factors per team per game.
+    columns:
+      - name: team_game_sk
+        tests: [unique, not_null]
+      - name: game_sk
+        tests:
+          - relationships: { to: ref('dim_game'), field: game_sk }
+      - name: efg_pct
+        tests:
+          - dbt_utils.accepted_range: { min_value: 0, max_value: 1.5 }

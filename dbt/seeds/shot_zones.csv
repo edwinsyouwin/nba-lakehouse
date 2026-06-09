@@ -1,0 +1,6 @@
+shot_zone,zone_group,typical_value
+Three Point,Perimeter,3
+Restricted Area,Rim,2
+Paint (Non-RA),Paint,2
+Mid-Range,Mid-Range,2
+Unknown,Unknown,2
