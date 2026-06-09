@@ -126,13 +126,15 @@ function val(team, j){{
   return MODE==='count' ? c : (VETS[j] ? +(100*c/VETS[j]).toFixed(1) : 0);
 }}
 function traces(){{
+  const unit = MODE==='pct' ? '%' : '';
   return TEAMS.map(t => ({{x:SEASONS, y:SEASONS.map((_,j)=>val(t,j)), name:t,
-                           mode:'lines+markers', type:'scatter'}}));
+                           mode:'lines+markers', type:'scatter',
+                           hovertemplate:'<b>'+t+'</b><br>%{{x}}: %{{y}}'+unit+'<extra></extra>'}}));
 }}
 function draw(){{
   Plotly.react('chart', traces(), {{
     paper_bgcolor:'#0f1117', plot_bgcolor:'#0f1117', font:{{color:'#cbd5e1'}},
-    margin:{{t:10,r:10,b:40,l:48}}, hovermode:'x unified',
+    margin:{{t:10,r:10,b:40,l:48}}, hovermode:'closest',
     xaxis:{{title:'Season',gridcolor:'#232838'}},
     yaxis:{{title: MODE==='count'?'Active vets':'% of season vet-years', gridcolor:'#232838'}},
     legend:{{orientation:'h',y:-0.18}}
