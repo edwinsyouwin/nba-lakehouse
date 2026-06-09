@@ -30,3 +30,8 @@ profiles.yml
 .DS_Store
 .vscode/
 .idea/
+
+# generated report artifacts (regenerate via reports/*.py)
+reports/*.html
+reports/*.png
+.playwright-mcp/
