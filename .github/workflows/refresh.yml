@@ -1,0 +1,84 @@
+name: Daily refresh
+
+# Scheduled end-to-end refresh: pull the current season, rebuild Silver->Gold,
+# recompute Elo, then test the derived layer. Matches how the code authenticates
+# today — an external PAT to the SQL warehouse (warehouse.py reads DATABRICKS_*).
+# The Lakeflow Job in the README is the target once ingestion runs in-workspace.
+
+on:
+  schedule:
+    - cron: "0 11 * * *"   # 11:00 UTC daily (~early AM US, after games settle)
+  workflow_dispatch:
+    inputs:
+      season:
+        description: "Season to refresh (blank = auto-detect current)"
+        required: false
+        default: ""
+
+# Never let two refreshes write the warehouse at once.
+concurrency:
+  group: daily-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    name: Extract -> dbt -> Elo -> test
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      DATABRICKS_CATALOG: ${{ secrets.DATABRICKS_CATALOG || 'nba' }}
+      DBT_PROFILES_DIR: ${{ github.workspace }}/dbt
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package + dbt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install dbt-databricks
+
+      - name: Resolve season
+        id: season
+        run: |
+          S="${{ github.event.inputs.season }}"
+          if [ -z "$S" ]; then
+            Y=$(date -u +%Y); M=$(( 10#$(date -u +%m) ))
+            if [ "$M" -ge 10 ]; then START=$Y; else START=$((Y-1)); fi
+            END=$(printf '%02d' $(( (START + 1) % 100 )))
+            S="${START}-${END}"
+          fi
+          echo "season=$S" >> "$GITHUB_OUTPUT"
+          echo "Refreshing season: $S"
+
+      - name: dbt deps
+        working-directory: dbt
+        run: |
+          cp profiles.example.yml profiles.yml
+          dbt deps
+
+      # 1. Pull the current season into Bronze (--force: re-pull the already-
+      #    checkpointed current season so new games land; history stays cached).
+      - name: Extract
+        run: python -m nba_warehouse.run_extract --season "${{ steps.season.outputs.season }}" --force
+
+      # 2. Build Silver -> Gold, but NOT the derived (Elo) source or its
+      #    descendants — analytics_team_elo doesn't exist until step 3.
+      - name: dbt build (core + marts)
+        working-directory: dbt
+        run: dbt build --exclude source:derived+
+
+      # 3. Recompute Elo from gold.fact_team_game -> gold.analytics_team_elo.
+      - name: Compute Elo
+        run: python -m nba_warehouse.elo
+
+      # 4. Now that the derived table exists, test it and build anything
+      #    downstream of it (e.g. future prediction marts).
+      - name: dbt build (derived + downstream)
+        working-directory: dbt
+        run: dbt build --select source:derived+

@@ -51,7 +51,7 @@ def compute(f: pd.DataFrame) -> pd.DataFrame:
     g = g.sort_values(["game_date", "game_id", "team_id"]).reset_index(drop=True)
 
     ratings: dict[int, float] = {}
-    last_season: dict[int, object] = {}
+    last_year: dict[int, object] = {}  # regress only across season *years*, not RS->PO
     rows = []
 
     for game_id, grp in g.groupby("game_id", sort=False):
@@ -62,10 +62,12 @@ def compute(f: pd.DataFrame) -> pd.DataFrame:
         for side in (a, b):
             tid = int(side["team_id"])
             r = ratings.get(tid, BASE)
-            if last_season.get(tid) not in (None, side["season_key"]):
+            # Regular Season and Playoffs share a season_start_year, so a team is
+            # not regressed between its last RS game and its first playoff game.
+            if last_year.get(tid) not in (None, side["season_start_year"]):
                 r = BASE + (1.0 - REGRESS) * (r - BASE)
             pre[tid] = r
-            last_season[tid] = side["season_key"]
+            last_year[tid] = side["season_start_year"]
         for side, other in ((a, b), (b, a)):
             tid, oid = int(side["team_id"]), int(other["team_id"])
             r_team, r_opp = pre[tid], pre[oid]
@@ -102,8 +104,10 @@ def run(chunk_size: int = 500) -> int:
     with wh.connection() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT team_game_sk, game_id, game_date, season_key, team_id, "
-            "opponent_team_id, is_home, points, win_flag FROM gold.fact_team_game"
+            "SELECT f.team_game_sk, f.game_id, f.game_date, f.season_key, "
+            "s.season_start_year, f.team_id, f.opponent_team_id, f.is_home, "
+            "f.points, f.win_flag "
+            "FROM gold.fact_team_game f JOIN gold.dim_season s USING (season_key)"
         )
         cols = [d[0] for d in cur.description]
         f = pd.DataFrame(cur.fetchall(), columns=cols)
