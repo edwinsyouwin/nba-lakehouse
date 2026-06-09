@@ -39,8 +39,11 @@ def player_ids(cur, min_to_year: int) -> list[int]:
 
 
 def _done_hashes(cur) -> set[str]:
+    # 'empty' = the API has no playercareerstats data for this player (returns {});
+    # treat it as resolved so it is not retried on every run.
     cur.execute(
-        f"SELECT param_hash FROM ops.crawl_state WHERE endpoint = '{ENDPOINT}' AND status = 'done'"
+        f"SELECT param_hash FROM ops.crawl_state WHERE endpoint = '{ENDPOINT}' "
+        "AND status IN ('done', 'empty')"
     )
     return {r[0] for r in cur.fetchall()}
 
@@ -71,7 +74,7 @@ def _flush(cur, rows: list[dict], source_cols: list[str], checkpoints: list[tupl
 
 def run(*, min_to_year: int = 1980, run_id: str | None = None) -> dict:
     run_id = run_id or uuid.uuid4().hex[:12]
-    summary = {"players": 0, "rows": 0, "skipped": 0, "failed": 0}
+    summary = {"players": 0, "rows": 0, "skipped": 0, "empty": 0, "failed": 0}
 
     with wh.connection() as conn:
         cur = conn.cursor()
@@ -95,6 +98,11 @@ def run(*, min_to_year: int = 1980, run_id: str | None = None) -> dict:
             time.sleep(API_DELAY_SECONDS)
             try:
                 df = playercareerstats.PlayerCareerStats(player_id=pid, timeout=60).get_data_frames()[0]
+            except KeyError:
+                # API returned an empty body ({}) for this player — no career data.
+                buf_ckpt.append((ph, 0, "empty"))
+                summary["empty"] += 1
+                continue
             except Exception as e:
                 buf_ckpt.append((ph, 0, f"failed:{type(e).__name__}"))
                 summary["failed"] += 1
