@@ -102,6 +102,10 @@ spent the first 4 years of their career. Click legend entries to toggle teams.</
 </div>
 <div id="chart"></div>
 
+<h3 id="barTitle">% of vet-years by team (desc)</h3>
+<p class="sub">Shows the current season by default; hover a point in the line chart above to see that season.</p>
+<div id="bars" style="height:420px"></div>
+
 <h3>Per-season player pool</h3>
 <table class="summary">
  <tr><th>Metric</th>{summary_head}</tr>
@@ -132,13 +136,34 @@ function traces(){{
                            hovertemplate:'<b>'+t+'</b><br>%{{x}}: %{{y}}'+unit+'<extra></extra>'}}));
 }}
 function draw(){{
-  Plotly.react('chart', traces(), {{
+  return Plotly.react('chart', traces(), {{
     paper_bgcolor:'#0f1117', plot_bgcolor:'#0f1117', font:{{color:'#cbd5e1'}},
     margin:{{t:10,r:10,b:40,l:48}}, hovermode:'closest',
     xaxis:{{title:'Season',gridcolor:'#232838'}},
     yaxis:{{title: MODE==='count'?'Active vets':'% of season vet-years', gridcolor:'#232838'}},
     legend:{{orientation:'h',y:-0.18}}
+  }}, {{responsive:true}}).then(bindHover);
+}}
+const CUR = SEASONS[SEASONS.length-1];
+function pctOf(t,j){{ return VETS[j] ? +(100*COUNTS[t][j]/VETS[j]).toFixed(1) : 0; }}
+function renderBars(season){{
+  const j = SEASONS.indexOf(season);
+  const rows = TEAMS.map(t=>({{t, v:pctOf(t,j)}})).sort((a,b)=>b.v-a.v);
+  Plotly.react('bars', [{{x:rows.map(r=>r.t), y:rows.map(r=>r.v), type:'bar',
+    marker:{{color:rows.map(r=>r.v), colorscale:'Blues'}},
+    hovertemplate:'<b>%{{x}}</b><br>'+season+': %{{y}}%<extra></extra>'}}], {{
+    paper_bgcolor:'#0f1117', plot_bgcolor:'#0f1117', font:{{color:'#cbd5e1'}},
+    margin:{{t:10,r:10,b:55,l:44}}, xaxis:{{tickangle:-60,gridcolor:'#232838'}},
+    yaxis:{{title:'% of vet-years',gridcolor:'#232838'}}
   }}, {{responsive:true}});
+  document.getElementById('barTitle').textContent =
+    season + (season===CUR?' (current)':'') + ' — % of vet-years by team (desc)';
+}}
+function bindHover(){{
+  const gd=document.getElementById('chart');
+  if(gd.removeAllListeners){{ gd.removeAllListeners('plotly_hover'); gd.removeAllListeners('plotly_unhover'); }}
+  gd.on('plotly_hover', e=>{{ if(e.points&&e.points.length) renderBars(e.points[0].x); }});
+  gd.on('plotly_unhover', ()=> renderBars(CUR));
 }}
 function renderTable(){{
   let h = '<tr><th>Team</th>'+SEASONS.map(s=>'<th>'+s+'</th>').join('')+'</tr>';
@@ -153,9 +178,9 @@ function setMode(m){{
   MODE=m;
   document.getElementById('bCount').classList.toggle('on', m==='count');
   document.getElementById('bPct').classList.toggle('on', m==='pct');
-  draw(); renderTable();
+  draw(); renderBars(CUR); renderTable();
 }}
-draw(); renderTable();
+draw(); renderBars(CUR); renderTable();
 </script>
 </div></body></html>"""
 
