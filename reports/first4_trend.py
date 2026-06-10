@@ -26,7 +26,7 @@ from pathlib import Path
 import pandas as pd
 from databricks import sql
 
-N_SEASONS = 10
+N_SEASONS = 20
 THRESHOLD = 4
 HERE = Path(__file__).parent
 OUT = HERE / "first4_trend.html"
