@@ -159,7 +159,9 @@ TEMPLATE = r"""<!doctype html>
  .summary td.k{color:#9aa4b2}
  #bars{display:flex;align-items:flex-end;gap:5px;height:360px;padding-top:18px;overflow-x:auto}
  .barcol{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:28px;transition:opacity .12s;cursor:pointer}
- .barcol.pinned .bar{box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 0 0 2px #3b82f6}
+ .bar{transition:filter .12s, box-shadow .12s}
+ .barcol.lit .bar{filter:brightness(1.4) saturate(1.15);
+   box-shadow:inset 0 0 0 1px rgba(255,255,255,.2),0 0 13px 1px rgba(255,255,255,.45)}
  .legrow.pinned{color:#fff;font-weight:700}
  .legrow.pinned .leglbl::after{content:" ●";color:#3b82f6;font-size:9px}
  #teamTable tr{transition:opacity .12s}
@@ -276,6 +278,7 @@ function buildLegend(){
   el.querySelectorAll('.legrow').forEach(r=>{
     r.addEventListener('mouseenter',()=>highlight(r.dataset.team));
     r.addEventListener('mouseleave',()=>highlight(null));
+    r.addEventListener('click',()=>togglePin(r.dataset.team));
   });
 }
 const PINNED=new Set(); let HOVER=null;
@@ -286,8 +289,9 @@ function applyHL(){
   document.querySelectorAll('#logolayer .dot').forEach(d=>{
     d.style.opacity = on?(s.has(d.dataset.team)?'1':'0.12'):'';});
   document.querySelectorAll('#bars .barcol').forEach(b=>{
-    b.style.opacity = on?(s.has(b.dataset.team)?'1':'0.22'):'';
-    b.classList.toggle('pinned',PINNED.has(b.dataset.team));});
+    const sel=s.has(b.dataset.team);
+    b.style.opacity = on?(sel?'1':'0.22'):'';
+    b.classList.toggle('lit', on && sel);});
   document.querySelectorAll('#teamTable tr[data-team]').forEach(r=>{
     const sel=s.has(r.dataset.team);
     r.style.opacity = on?(sel?'1':'0.3'):'';
