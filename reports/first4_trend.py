@@ -40,6 +40,18 @@ COLORS = {
     "UTA": "#002B5C", "WAS": "#002B5C",
 }
 
+# Canonical secondary/accent colors (used for the line-chart markers).
+SECONDARY = {
+    "ATL": "#C1D32F", "BOS": "#BA9653", "BKN": "#FFFFFF", "CHA": "#00788C",
+    "CHI": "#000000", "CLE": "#FDBB30", "DAL": "#B8C4CA", "DEN": "#FEC524",
+    "DET": "#1D42BA", "GSW": "#FFC72C", "HOU": "#C4CED4", "IND": "#FDBB30",
+    "LAC": "#1D428A", "LAL": "#FDB927", "MEM": "#F5B112", "MIA": "#F9A01B",
+    "MIL": "#EEE1C6", "MIN": "#78BE20", "NOP": "#C8102E", "NYK": "#F58426",
+    "OKC": "#EF3B24", "ORL": "#C4CED4", "PHI": "#ED174C", "PHX": "#E56020",
+    "POR": "#000000", "SAC": "#63727A", "SAS": "#000000", "TOR": "#B4B5B8",
+    "UTA": "#F9A01B", "WAS": "#E31837",
+}
+
 
 def fetch() -> pd.DataFrame:
     with sql.connect(
@@ -162,13 +174,15 @@ primary color with its logo as a backdrop.</p>
 <table id="teamTable"></table>
 
 <script>
-const SEASONS={seasons}, TEAMS={teams}, COUNTS={counts}, VETS={vets}, COLORS={colors}, LOGOS={logos};
+const SEASONS={seasons}, TEAMS={teams}, COUNTS={counts}, VETS={vets}, COLORS={colors}, SECOND={second}, LOGOS={logos};
 const CUR=SEASONS[SEASONS.length-1];
 let MODE='count';
 function val(t,j){{const c=COUNTS[t][j];return MODE==='count'?c:(VETS[j]?+(100*c/VETS[j]).toFixed(1):0);}}
 function pctOf(t,j){{return VETS[j]?+(100*COUNTS[t][j]/VETS[j]).toFixed(1):0;}}
 function lineTraces(){{const u=MODE==='pct'?'%':'';
   return TEAMS.map(t=>({{x:SEASONS,y:SEASONS.map((_,j)=>val(t,j)),name:t,mode:'lines+markers',type:'scatter',
+    line:{{color:COLORS[t]||'#888',width:2}},
+    marker:{{color:SECOND[t]||'#fff',size:7,line:{{width:1,color:'rgba(255,255,255,.5)'}}}},
     hovertemplate:'<b>'+t+'</b><br>%{{x}}: %{{y}}'+u+'<extra></extra>'}}));}}
 function draw(){{return Plotly.react('chart',lineTraces(),{{
    paper_bgcolor:'#0f1117',plot_bgcolor:'#0f1117',font:{{color:'#cbd5e1'}},
@@ -224,6 +238,7 @@ def render(data):
         seasons=json.dumps(s), teams=json.dumps(teams),
         counts=json.dumps(data["counts"]), vets=json.dumps(data["vets"]),
         colors=json.dumps({t: COLORS.get(t, "#888888") for t in teams}),
+        second=json.dumps({t: SECONDARY.get(t, "#FFFFFF") for t in teams}),
         logos=json.dumps(logo_uris(teams)),
         summary_head="".join(f"<th>{x}</th>" for x in s),
         row_active=cells(data["active"]),
