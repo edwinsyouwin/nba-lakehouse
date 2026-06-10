@@ -185,26 +185,29 @@ function lineTraces(){{const u=MODE==='pct'?'%':'';
     mode:'lines',type:'scatter',customdata:SEASONS,opacity:0.32,
     line:{{color:COLORS[t]||'#888',width:11}},
     hovertemplate:'<b>'+t+'</b><br>%{{customdata}}: %{{y}}'+u+'<extra></extra>'}}));}}
-function placeLogos(){{
+function buildImages(fan){{   // fan = {{j, y}} cluster to fan out, or null
   const gd=document.getElementById('chart'); const fl=gd&&gd._fullLayout;
-  if(!fl||!fl._size) return;
+  if(!fl||!fl._size) return [];
   const sz=fl._size, xr=fl.xaxis.range, yr=fl.yaxis.range;
   const sizex=LPX*(xr[1]-xr[0])/sz.w, sizey=LPX*(yr[1]-yr[0])/sz.h;
-  const dx=(LPX+2)*(xr[1]-xr[0])/sz.w;   // tie spacing (x units)
+  const dx=(LPX+2)*(xr[1]-xr[0])/sz.w;   // fan spacing (x units)
   const imgs=[];
   for(let j=0;j<SEASONS.length;j++){{
     const groups={{}};
     for(const t of TEAMS){{const y=val(t,j); (groups[y]=groups[y]||[]).push(t);}}
     for(const y in groups){{
       const arr=groups[y], k=arr.length;
+      const fanned = fan && fan.j===j && Math.abs((+y)-fan.y)<1e-9 && k>1;
       arr.forEach((t,i)=>{{ if(!LOGOS[t]) return;
-        imgs.push({{source:LOGOS[t],xref:'x',yref:'y',x:j+(i-(k-1)/2)*dx,y:+y,
+        const off = fanned ? (i-(k-1)/2)*dx : 0;   // overlap unless hovered
+        imgs.push({{source:LOGOS[t],xref:'x',yref:'y',x:j+off,y:+y,
           sizex,sizey,xanchor:'center',yanchor:'middle',layer:'above',sizing:'contain'}});
       }});
     }}
   }}
-  Plotly.relayout('chart',{{images:imgs}});
+  return imgs;
 }}
+function placeLogos(fan){{ Plotly.relayout('chart',{{images:buildImages(fan)}}); }}
 function draw(){{return Plotly.react('chart',lineTraces(),{{
    paper_bgcolor:'#0f1117',plot_bgcolor:'#0f1117',font:{{color:'#cbd5e1'}},
    margin:{{t:10,r:10,b:40,l:48}},hovermode:'closest',
@@ -236,8 +239,9 @@ function renderTable(){{
 }}
 function bindHover(){{const gd=document.getElementById('chart');
   if(gd.removeAllListeners){{gd.removeAllListeners('plotly_hover');gd.removeAllListeners('plotly_unhover');}}
-  gd.on('plotly_hover',e=>{{const p=e.points&&e.points[0]; if(p)renderBars(p.customdata||SEASONS[Math.round(p.x)]);}});
-  gd.on('plotly_unhover',()=>renderBars(CUR));}}
+  gd.on('plotly_hover',e=>{{const p=e.points&&e.points[0]; if(!p)return;
+    const j=Math.round(p.x); renderBars(p.customdata||SEASONS[j]); placeLogos({{j,y:p.y}});}});
+  gd.on('plotly_unhover',()=>{{renderBars(CUR);placeLogos();}});}}
 let _rz; window.addEventListener('resize',()=>{{clearTimeout(_rz);_rz=setTimeout(placeLogos,250);}});
 function setMode(m){{MODE=m;
   document.getElementById('bCount').classList.toggle('on',m==='count');
