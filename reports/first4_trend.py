@@ -263,7 +263,7 @@ function layoutLogos(){
   }
   // full-height season columns: hover changes the bar chart, click pins the year
   const slayer=document.getElementById('seasonlayer'); slayer.innerHTML='';
-  const ptop=ya._offset, ph=ya._length, step=xa.l2p(1)-xa.l2p(0);
+  const ptop=ya._offset, ph=ya._length+fl._size.b, step=xa.l2p(1)-xa.l2p(0);  // +b: include axis labels
   for(let j=0;j<SEASONS.length;j++){
     const cx=xa._offset+xa.l2p(j);
     const col=document.createElement('div'); col.className='scol'; col.dataset.season=SEASONS[j];
