@@ -31,7 +31,8 @@ THRESHOLD = 4
 HERE = Path(__file__).parent
 OUT = HERE / "first4_trend.html"
 LOGO_DIR = HERE / "logos"
-CACHE = HERE / "_cache.json"
+CACHE = HERE / "_cache.json"     # aggregated result (fixed window) — last-resort fallback
+RAW = HERE / "_raw.csv"          # raw fact_player_season — recompute any window offline
 
 COLORS = {
     "ATL": "#E03A3E", "BOS": "#007A33", "BKN": "#000000", "CHA": "#1D1160",
@@ -391,16 +392,28 @@ def render(data):
     print(f"wrote {OUT} ({len(teams)} teams x {len(s)} seasons); logos missing: {miss or 'none'}")
 
 
-def main():
+def _load():
+    """Return (df, data, source). Prefer the warehouse; then the raw cache
+    (recomputes any window offline); then the aggregated cache (fixed window)."""
     try:
-        data = compute(fetch())
-        CACHE.write_text(json.dumps(data))
-        print("data source: warehouse (cache refreshed)")
+        df = fetch()
+        df.to_csv(RAW, index=False)
+        return df, None, "warehouse (raw cache refreshed)"
     except Exception as e:
-        if not CACHE.exists():
-            raise
-        data = json.loads(CACHE.read_text())
-        print(f"data source: cache (warehouse unavailable: {type(e).__name__})")
+        note = f"warehouse unavailable: {type(e).__name__}"
+        if RAW.exists():
+            return pd.read_csv(RAW, dtype={"season": str, "abbr": str}), None, f"raw cache ({note})"
+        if CACHE.exists():
+            return None, json.loads(CACHE.read_text()), f"aggregated cache ({note})"
+        raise
+
+
+def main():
+    df, data, src = _load()
+    print("data source:", src)
+    if data is None:
+        data = compute(df)
+        CACHE.write_text(json.dumps(data))
     render(data)
 
 

@@ -34,4 +34,5 @@ profiles.yml
 # generated report artifacts (regenerate via reports/*.py)
 reports/*.html
 reports/*.png
+reports/_raw.csv
 .playwright-mcp/
