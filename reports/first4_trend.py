@@ -129,7 +129,8 @@ TEMPLATE = r"""<!doctype html>
  body{font:14px -apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1117;color:#e6e6e6}
  .wrap{max-width:1100px;margin:0 auto;padding:24px}
  h1{font-size:22px;margin:0 0 4px} h3{margin:26px 0 8px} p.sub{color:#9aa4b2;margin:0 0 14px}
- #chartwrap{position:relative}
+ .chartrow{display:flex;gap:14px;align-items:flex-start}
+ #chartwrap{position:relative;flex:1;min-width:0}
  #chart{height:560px}
  #logolayer{position:absolute;inset:0;pointer-events:none;z-index:5}
  .cluster{position:absolute;height:16px;transform:translate(-50%,-50%);pointer-events:auto}
@@ -144,7 +145,7 @@ TEMPLATE = r"""<!doctype html>
  #tip .tiphead{font-weight:700;margin-bottom:4px;color:#9aa4b2}
  #tip .tipteam{display:inline-flex;align-items:center;gap:3px;margin:2px 7px 2px 0;font-weight:600}
  #tip .tipteam img{width:15px;height:15px}
- #legend{display:flex;flex-wrap:wrap;gap:7px 16px;margin-top:14px}
+ #legend{width:120px;flex:none;display:flex;flex-direction:column;gap:5px;max-height:560px;overflow-y:auto}
  .legrow{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#cbd5e1;opacity:.92}
  .legrow:hover{opacity:1}
  .legline{position:relative;display:inline-block;width:48px;border-top:3px solid;height:0}
@@ -174,8 +175,10 @@ first 4 years of their career. Hover a cluster to fan logos apart; hover a legen
   <button id="bCount" class="on" onclick="setMode('count')">Counts</button>
   <button id="bPct" onclick="setMode('pct')">% of vet-years</button>
 </div>
-<div id="chartwrap"><div id="chart"></div><div id="logolayer"></div><div id="tip"></div></div>
-<div id="legend"></div>
+<div class="chartrow">
+  <div id="chartwrap"><div id="chart"></div><div id="logolayer"></div><div id="tip"></div></div>
+  <div id="legend"></div>
+</div>
 
 <h3 id="barTitle">% of vet-years by team (desc)</h3>
 <p class="sub">Current season by default; hover a cluster in the line chart to see that season.</p>
@@ -261,7 +264,7 @@ function hideTip(){document.getElementById('tip').style.display='none';}
 
 function buildLegend(){
   const el=document.getElementById('legend');
-  el.innerHTML=TEAMS.map(t=>'<span class="legrow" data-team="'+t+'">'+
+  el.innerHTML=[...TEAMS].sort().map(t=>'<span class="legrow" data-team="'+t+'">'+
     '<span class="legline" style="border-color:'+DCOLORS[t]+'">'+
     (LOGOS[t]?'<img src="'+LOGOS[t]+'">':'')+'</span><span class="leglbl">'+t+'</span></span>').join('');
   el.querySelectorAll('.legrow').forEach(r=>{
