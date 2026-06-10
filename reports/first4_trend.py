@@ -125,11 +125,13 @@ HTML = """<!doctype html>
  #bars{{display:flex;align-items:flex-end;gap:5px;height:360px;padding-top:18px;overflow-x:auto}}
  .barcol{{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:28px}}
  .barval{{font-size:10px;color:#9aa4b2;margin-bottom:3px}}
- .bar{{width:30px;border-radius:4px 4px 0 0;position:relative;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);
-       transition:filter .12s}}
- .bar:hover{{filter:brightness(1.18)}}
- .bar img{{position:absolute;top:4px;left:50%;transform:translateX(-50%);width:24px;height:24px;
-           opacity:.95;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}}
+ .bar{{width:34px;border-radius:4px 4px 0 0;position:relative;overflow:hidden;
+       box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);transition:filter .12s}}
+ .bar:hover{{filter:brightness(1.15)}}
+ .bar:hover .tint{{opacity:.55}}            /* reveal the logo more on hover */
+ .bar .logo{{position:absolute;inset:0;background-position:center;background-repeat:no-repeat;
+             background-size:cover}}
+ .bar .tint{{position:absolute;inset:0;opacity:.74;transition:opacity .12s}}
  .barlbl{{font-size:10px;color:#cbd5e1;margin-top:4px;font-weight:600}}
 </style></head><body><div class="wrap">
 <h1>Where the league grew up — first-4-years development team</h1>
@@ -182,8 +184,10 @@ function renderBars(season){{
     const h=Math.max(8,Math.round(r.v/mx*H)), col=COLORS[r.t]||'#888', logo=LOGOS[r.t];
     return '<div class="barcol" title="'+r.t+' '+season+': '+r.v+'%">'+
            '<div class="barval">'+r.v+'%</div>'+
-           '<div class="bar" style="height:'+h+'px;background:'+col+'">'+
-           (logo?'<img src="'+logo+'">':'')+'</div>'+
+           '<div class="bar" style="height:'+h+'px">'+
+           (logo?'<div class="logo" style="background-image:url('+logo+')"></div>':'')+
+           '<div class="tint" style="background:'+col+'"></div>'+
+           '</div>'+
            '<div class="barlbl">'+r.t+'</div></div>';
   }}).join('');
   document.getElementById('barTitle').textContent=season+(season===CUR?' (current)':'')+' — % of vet-years by team (desc)';
