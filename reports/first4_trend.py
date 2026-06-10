@@ -132,6 +132,10 @@ TEMPLATE = r"""<!doctype html>
  .chartrow{display:flex;gap:14px;align-items:flex-start}
  #chartwrap{position:relative;flex:1;min-width:0}
  #chart{height:560px}
+ #seasonlayer{position:absolute;inset:0;pointer-events:none;z-index:4}
+ .scol{position:absolute;pointer-events:auto;cursor:pointer;transition:background .12s}
+ .scol:hover{background:rgba(255,255,255,.045)}
+ .scol.pinnedSeason{background:rgba(59,130,246,.12)}
  #logolayer{position:absolute;inset:0;pointer-events:none;z-index:5}
  .cluster{position:absolute;height:16px;transform:translate(-50%,-50%);pointer-events:auto}
  .cluster .dot{position:absolute;left:50%;top:50%;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;
@@ -183,7 +187,7 @@ first 4 years of their career. Hover a cluster to fan logos apart; hover a legen
   <button id="bClear" onclick="clearPins()" style="margin-left:14px">Clear selection</button>
 </div>
 <div class="chartrow">
-  <div id="chartwrap"><div id="chart"></div><div id="logolayer"></div><div id="tip"></div></div>
+  <div id="chartwrap"><div id="chart"></div><div id="seasonlayer"></div><div id="logolayer"></div><div id="tip"></div></div>
   <div id="legend"></div>
 </div>
 
@@ -252,11 +256,24 @@ function layoutLogos(){
         d.style.setProperty('--off',off+'px');
         c.appendChild(d);
       });
-      c.addEventListener('mouseenter',()=>{showCluster(arr,season,val(arr[0],j),cx,cy,k*sp);renderBars(season);});
-      c.addEventListener('mouseleave',()=>{hideTip();renderBars(CUR);});
+      c.addEventListener('mouseenter',()=>{showCluster(arr,season,val(arr[0],j),cx,cy,k*sp);setHoverSeason(season);});
+      c.addEventListener('mouseleave',()=>{hideTip();setHoverSeason(null);});
       layer.appendChild(c);
     }
   }
+  // full-height season columns: hover changes the bar chart, click pins the year
+  const slayer=document.getElementById('seasonlayer'); slayer.innerHTML='';
+  const ptop=ya._offset, ph=ya._length, step=xa.l2p(1)-xa.l2p(0);
+  for(let j=0;j<SEASONS.length;j++){
+    const cx=xa._offset+xa.l2p(j);
+    const col=document.createElement('div'); col.className='scol'; col.dataset.season=SEASONS[j];
+    col.style.left=(cx-step/2)+'px'; col.style.top=ptop+'px'; col.style.width=step+'px'; col.style.height=ph+'px';
+    col.addEventListener('mouseenter',()=>setHoverSeason(SEASONS[j]));
+    col.addEventListener('mouseleave',()=>setHoverSeason(null));
+    col.addEventListener('click',()=>togglePinSeason(SEASONS[j]));
+    slayer.appendChild(col);
+  }
+  markSeasonPins();
   applyHL();
 }
 // One tooltip for the whole cluster (all tied teams), placed above the fanned
@@ -300,7 +317,16 @@ function applyHL(){
 }
 function highlight(team){HOVER=team;applyHL();}              // transient (legend hover)
 function togglePin(team){PINNED.has(team)?PINNED.delete(team):PINNED.add(team);applyHL();}  // persistent
-function clearPins(){PINNED.clear();applyHL();}
+function clearPins(){PINNED.clear();PINNED_SEASON=null;HOVER_SEASON=null;markSeasonPins();renderBars(curSeason());applyHL();}
+
+// --- bar-chart season selection (driven by hovering/clicking year columns) ---
+let HOVER_SEASON=null, PINNED_SEASON=null, _barRAF=0;
+function curSeason(){return HOVER_SEASON||PINNED_SEASON||CUR;}
+function setHoverSeason(s){HOVER_SEASON=s; if(_barRAF)cancelAnimationFrame(_barRAF);
+  _barRAF=requestAnimationFrame(()=>renderBars(curSeason()));}
+function togglePinSeason(s){PINNED_SEASON=(PINNED_SEASON===s?null:s); renderBars(curSeason()); markSeasonPins();}
+function markSeasonPins(){document.querySelectorAll('#seasonlayer .scol').forEach(c=>
+  c.classList.toggle('pinnedSeason', c.dataset.season===PINNED_SEASON));}
 
 function renderBars(season){
   const j=SEASONS.indexOf(season);
@@ -315,7 +341,8 @@ function renderBars(season){
       '<div class="tint" style="background:'+col+'"></div></div>'+
       '<div class="barlbl">'+r.t+'</div></div>';
   }).join('');
-  document.getElementById('barTitle').textContent=season+(season===CUR?' (current)':'')+' — % of vet-years by team (desc)';
+  const tag=season===PINNED_SEASON?' (pinned)':(season===CUR?' (current)':'');
+  document.getElementById('barTitle').textContent=season+tag+' — % of vet-years by team (desc)';
   applyHL();
 }
 function renderTable(){
