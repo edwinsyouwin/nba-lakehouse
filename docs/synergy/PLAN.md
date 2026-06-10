@@ -27,7 +27,7 @@ quota-free modeling iteration.
 | dbt staging → features → marts | dbt project (dbt-databricks) + `generate_schema_name` macro | **Reuse/extend** |
 | Eval harness + `results` table pattern | `src/nba_warehouse/elo_backtest.py` + offline-cache reports | **Reuse as template** |
 | DuckDB local store | **MotherDuck** (you just added `MOTHERDUCK_TOKEN`) | **Adopt** |
-| Possession/stint data (pbpstats) | not present; we have `fact_play_by_play` + `gamerotation` (registry) | **New** |
+| Possession/stint data | `gamerotation` (subs timing) + `fact_play_by_play` (points) — **no pbpstats** | **New (nba_api)** |
 | Garbage-time filter inputs | `fact_play_by_play` (period, clock, score) + `fact_player_season` (minutes) | **Reuse** |
 | Player-id canonicalization | NBA `person_id` used throughout | **Reuse** |
 
@@ -72,7 +72,7 @@ nba-lakehouse/
 ├── src/nba_warehouse/                # EXISTING ingestion framework — extend
 │   ├── extract_synergy.py            # NEW: synergy/tracking/hustle/matchup league-season crawls
 │   ├── extract_shotchart.py          # NEW: shotchartdetail per player-season (fanout like extract_career)
-│   ├── ingest_pbpstats.py            # NEW: pbpstats.com possession/lineup client (or gamerotation fallback)
+│   ├── extract_rotation.py           # NEW: gamerotation per game (substitution timing -> stints)
 │   └── sync_motherduck.py            # NEW: export Gold tables -> Parquet/MotherDuck (reuses cache pattern)
 ├── src/nba_synergy/                  # NEW: modeling code (kept separate from ingestion)
 │   ├── stints.py                     # stint construction from possessions
@@ -122,15 +122,25 @@ Optional proxy support already noted in our docs.
 - Acceptance unchanged (`--season 2023-24` populates Bronze, resumable, row-count
   sanity vs ~500 players / 1230 games) — our extractor already prints/loads counts.
 
-**1.3 Possession / stint source — NEW, decision required.**
-- **Recommended:** `ingest_pbpstats.py` against `api.pbpstats.com` (possessions +
-  lineup stints, substitution-timing handled) → Bronze. Saves the multi-week
-  possession-parsing swamp (plan pitfall #2).
-- **No-new-dependency fallback:** build stints from **`gamerotation`** (player
-  in/out times, in our registry) joined to `fact_play_by_play` for points. Viable
-  because our PBP already carries `score_home/score_away`, `period`, `clock`,
-  `team_id`, `player_id` — but possession attribution is the hard part, so treat as
-  fallback. Either way it lands in Bronze and is consumed by `dbt_synergy`.
+**1.3 Possession / stint source — NEW (nba_api only; no pbpstats).**
+Decision made: **no external dependency.** Verified live that nba_api covers it:
+- **`gamerotation`** (`extract_rotation.py`) returns every player's
+  `IN_TIME_REAL`/`OUT_TIME_REAL` (tenths of a second from tip-off) for both teams →
+  reconstruct the 10 on the floor at any instant → **stint boundaries**. This is
+  exactly what pbpstats was recommended for (the substitution-timing swamp), in one
+  call per game.
+- Points + events come from our existing **`fact_play_by_play`** (`score_home/away`,
+  `period`, `clock`, `team_id`, `player_id`).
+- **Possessions:** PBP doesn't label them, so v1 **estimates** per stint via the
+  standard formula `FGA + 0.44·FTA − OREB + TOV` from events inside the stint
+  window (exact event-based possession parsing is a later refinement). The only
+  fiddly bit is aligning gamerotation's tenths-from-tip-off to PBP's period+clock
+  on a common "seconds elapsed" axis — bounded work.
+- **`leaguedashlineups`** (2,000 five-man units/season with OFF/DEF/NET_RATING +
+  POSS) is pulled too — used as a **validation target** (compare predicted vs
+  actual lineup net ratings) and as a fast teammate-only v1 if needed.
+- pbpstats remains an *optional* future swap only if exact possession parsing
+  becomes the bottleneck; not part of v1.
 
 ---
 
@@ -228,8 +238,8 @@ Model spec unchanged: `ŷ = μ + Σ aᵒ + Σ aᵈ + Σ⟨u(oᵢ),u(oⱼ)⟩ + �
 
 1. **Harden extractor** (backoff/jitter/dead-letter) + crawl one season of the new
    nba_api endpoints (synergy/tracking/hustle/matchups/shotchart) → Bronze. *(reuse)*
-2. **Possession/stint source**: stand up `ingest_pbpstats.py` (or gamerotation
-   fallback) for that season → Bronze. *(new)*
+2. **Possession/stint source**: `extract_rotation.py` (`gamerotation`) for that
+   season → Bronze; build stints from it + `fact_play_by_play`. *(new)*
 3. **MotherDuck sync**: export the needed Gold/Bronze tables to MotherDuck/DuckDB
    via the cache pattern; stand up `dbt_synergy` (dbt-duckdb). *(new, small)*
 4. **`marts.stints` + dbt tests** (Phase 2). *(new)*
@@ -241,16 +251,17 @@ Model spec unchanged: `ŷ = μ + Σ aᵒ + Σ aᵈ + Σ⟨u(oᵢ),u(oⱼ)⟩ + �
 
 ---
 
-## Decisions to confirm before coding
+## Decisions
 
-1. **Possession source:** pbpstats.com (recommended, fastest) vs. `gamerotation` +
-   our PBP (no new dependency, more parsing risk). 
+1. **Possession source — DECIDED: `gamerotation` + `fact_play_by_play`** (nba_api
+   only, no pbpstats). Possessions estimated per stint for v1; exact parsing later.
 2. **Modeling store:** MotherDuck (cloud DuckDB, shareable) vs. local DuckDB file
-   (`data/synergy.duckdb`). Recommend MotherDuck since you've added the token.
+   (`data/synergy.duckdb`). Recommend MotherDuck since you've added the token. *(open)*
 3. **Synergy feature dbt project:** `dbt-duckdb` (recommended, cheap iteration) vs.
-   adding models to the existing dbt-databricks project (governed but quota-bound).
+   adding models to the existing dbt-databricks project (governed but quota-bound). *(open)*
 
 Inherited pitfalls still apply verbatim: stats.nba.com hostility (→ our cache +
-backoff), possession parsing swamp (→ pbpstats), id joins (NBA ids, verify ~100%),
+backoff), possession parsing swamp (→ `gamerotation` removes the substitution-
+timing half; estimate possessions for v1), id joins (NBA ids, verify ~100%),
 sorted lineup keys, collinearity (→ feature anchoring + masking), leakage on the
 temporal split, never filter short stints (possession-weight instead).
