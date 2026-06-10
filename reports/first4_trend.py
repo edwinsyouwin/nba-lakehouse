@@ -158,7 +158,8 @@ TEMPLATE = r"""<!doctype html>
  th{position:sticky;top:0;background:#161a23;color:#cbd5e1} tr:hover td{background:#161a23}
  .summary td.k{color:#9aa4b2}
  #bars{display:flex;align-items:flex-end;gap:5px;height:360px;padding-top:18px;overflow-x:auto}
- .barcol{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:28px}
+ .barcol{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:28px;transition:opacity .12s}
+ #teamTable tr{transition:opacity .12s}
  .barval{font-size:10px;color:#9aa4b2;margin-bottom:3px}
  .bar{width:34px;border-radius:4px 4px 0 0;position:relative;overflow:hidden;
    box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);transition:filter .12s}
@@ -277,6 +278,13 @@ function highlight(team){
   document.querySelectorAll('#logolayer .dot').forEach(d=>{
     d.style.opacity = team ? (d.dataset.team===team?'1':'0.12') : '';
   });
+  document.querySelectorAll('#bars .barcol').forEach(b=>{
+    b.style.opacity = team ? (b.dataset.team===team?'1':'0.22') : '';
+  });
+  document.querySelectorAll('#teamTable tr[data-team]').forEach(r=>{
+    r.style.opacity = team ? (r.dataset.team===team?'1':'0.3') : '';
+    r.style.background = (team && r.dataset.team===team) ? 'rgba(59,130,246,.16)' : '';
+  });
 }
 
 function renderBars(season){
@@ -285,7 +293,7 @@ function renderBars(season){
   const mx=Math.max(...rows.map(r=>r.v),1), H=300;
   document.getElementById('bars').innerHTML=rows.map(r=>{
     const h=Math.max(8,Math.round(r.v/mx*H)), col=DCOLORS[r.t]||'#888', logo=LOGOS[r.t];
-    return '<div class="barcol" title="'+r.t+' '+season+': '+r.v+'%">'+
+    return '<div class="barcol" data-team="'+r.t+'" title="'+r.t+' '+season+': '+r.v+'%">'+
       '<div class="barval">'+r.v+'%</div>'+
       '<div class="bar" style="height:'+h+'px">'+
       (logo?'<div class="logo" style="background-image:url('+logo+')"></div>':'')+
@@ -296,7 +304,7 @@ function renderBars(season){
 }
 function renderTable(){
   let h='<tr><th>Team</th>'+SEASONS.map(s=>'<th>'+s+'</th>').join('')+'</tr>';
-  for(const t of TEAMS) h+='<tr><td>'+t+'</td>'+SEASONS.map((_,j)=>'<td>'+val(t,j)+(MODE==='pct'?'%':'')+'</td>').join('')+'</tr>';
+  for(const t of TEAMS) h+='<tr data-team="'+t+'"><td>'+t+'</td>'+SEASONS.map((_,j)=>'<td>'+val(t,j)+(MODE==='pct'?'%':'')+'</td>').join('')+'</tr>';
   document.getElementById('teamTable').innerHTML=h;
   document.getElementById('tblTitle').textContent='Vets attributed, by team × season ('+(MODE==='count'?'counts':'% of vet-years')+')';
 }
