@@ -178,6 +178,7 @@ first 4 years of their career. Hover a cluster to fan logos apart; hover a legen
 <div class="toggle">
   <button id="bCount" class="on" onclick="setMode('count')">Counts</button>
   <button id="bPct" onclick="setMode('pct')">% of vet-years</button>
+  <button id="bClear" onclick="clearPins()" style="margin-left:14px">Clear selection</button>
 </div>
 <div class="chartrow">
   <div id="chartwrap"><div id="chart"></div><div id="logolayer"></div><div id="tip"></div></div>
@@ -295,6 +296,7 @@ function applyHL(){
 }
 function highlight(team){HOVER=team;applyHL();}              // transient (legend hover)
 function togglePin(team){PINNED.has(team)?PINNED.delete(team):PINNED.add(team);applyHL();}  // persistent
+function clearPins(){PINNED.clear();applyHL();}
 
 function renderBars(season){
   const j=SEASONS.indexOf(season);
