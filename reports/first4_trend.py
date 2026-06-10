@@ -132,11 +132,12 @@ TEMPLATE = r"""<!doctype html>
  #chartwrap{position:relative}
  #chart{height:560px}
  #logolayer{position:absolute;inset:0;pointer-events:none;z-index:5}
- .cluster{position:absolute;height:26px;transform:translate(-50%,-50%);pointer-events:auto}
- .cluster .lg{position:absolute;left:50%;top:0;width:26px;height:26px;margin-left:-13px;
-   transition:transform .12s, opacity .12s;cursor:pointer;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
- .cluster:hover .lg{transform:translateX(var(--off))}
- .cluster .lg:hover{transform:translateX(var(--off)) scale(1.22);z-index:7}
+ .cluster{position:absolute;height:16px;transform:translate(-50%,-50%);pointer-events:auto}
+ .cluster .dot{position:absolute;left:50%;top:50%;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;
+   border-radius:50%;border:2px solid;box-sizing:border-box;cursor:pointer;
+   transition:transform .12s, opacity .12s;box-shadow:0 1px 2px rgba(0,0,0,.5)}
+ .cluster:hover .dot{transform:translateX(var(--off))}
+ .cluster .dot:hover{transform:translateX(var(--off)) scale(1.35);z-index:7}
  #tip{position:absolute;pointer-events:none;background:#161a23;border:1px solid #2a3142;border-radius:6px;
    padding:6px 9px;font-size:12px;color:#e6e6e6;transform:translate(-50%,-100%);max-width:280px;
    display:none;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,.45)}
@@ -223,7 +224,7 @@ function draw(){return Plotly.react('chart',lineTraces(),{
 function layoutLogos(){
   const gd=document.getElementById('chart'), fl=gd&&gd._fullLayout;
   if(!fl||!fl._size) return;
-  const xa=fl.xaxis, ya=fl.yaxis, sp=LPX+2, layer=document.getElementById('logolayer');
+  const xa=fl.xaxis, ya=fl.yaxis, sp=15, layer=document.getElementById('logolayer');
   layer.innerHTML='';
   for(let j=0;j<SEASONS.length;j++){
     const groups={};
@@ -232,13 +233,14 @@ function layoutLogos(){
       const arr=groups[y], k=arr.length;
       const cx=xa._offset+xa.l2p(j), cy=ya._offset+ya.l2p(+y);
       const c=document.createElement('div'); c.className='cluster';
-      c.style.left=cx+'px'; c.style.top=cy+'px'; c.style.width=Math.max(LPX,k*sp)+'px';
+      c.style.left=cx+'px'; c.style.top=cy+'px'; c.style.width=Math.max(13,k*sp)+'px';
       const season=SEASONS[j];
-      arr.forEach((t,i)=>{ if(!LOGOS[t]) return;
+      arr.forEach((t,i)=>{
         const off=(i-(k-1)/2)*sp;
-        const im=document.createElement('img'); im.className='lg'; im.src=LOGOS[t]; im.dataset.team=t;
-        im.style.setProperty('--off',off+'px');
-        c.appendChild(im);
+        const d=document.createElement('div'); d.className='dot'; d.dataset.team=t;
+        d.style.background=SECOND[t]||'#fff'; d.style.borderColor=DCOLORS[t]||'#888';
+        d.style.setProperty('--off',off+'px');
+        c.appendChild(d);
       });
       c.addEventListener('mouseenter',()=>{showCluster(arr,season,val(arr[0],j),cx,cy,k*sp);renderBars(season);});
       c.addEventListener('mouseleave',()=>{hideTip();renderBars(CUR);});
@@ -253,7 +255,7 @@ function showCluster(arr,season,v,cx,cy,fanW){
   const items=arr.map(t=>'<span class="tipteam">'+(LOGOS[t]?'<img src="'+LOGOS[t]+'">':'')+t+'</span>').join('');
   const head=season+' · '+v+u+(arr.length>1?(' · '+arr.length+' teams'):'');
   tip.innerHTML='<div class="tiphead">'+head+'</div>'+items;
-  tip.style.left=cx+'px'; tip.style.top=(cy-LPX*0.85)+'px'; tip.style.display='block';
+  tip.style.left=cx+'px'; tip.style.top=(cy-13)+'px'; tip.style.display='block';
 }
 function hideTip(){document.getElementById('tip').style.display='none';}
 
@@ -269,8 +271,8 @@ function buildLegend(){
 }
 function highlight(team){
   Plotly.restyle('chart',{opacity:TEAMS.map(t=>team?(t===team?0.95:0.05):0.3)});
-  document.querySelectorAll('#logolayer .lg').forEach(im=>{
-    im.style.opacity = team ? (im.dataset.team===team?'1':'0.08') : '';
+  document.querySelectorAll('#logolayer .dot').forEach(d=>{
+    d.style.opacity = team ? (d.dataset.team===team?'1':'0.12') : '';
   });
 }
 
