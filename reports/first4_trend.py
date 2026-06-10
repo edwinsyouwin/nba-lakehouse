@@ -158,7 +158,10 @@ TEMPLATE = r"""<!doctype html>
  th{position:sticky;top:0;background:#161a23;color:#cbd5e1} tr:hover td{background:#161a23}
  .summary td.k{color:#9aa4b2}
  #bars{display:flex;align-items:flex-end;gap:5px;height:360px;padding-top:18px;overflow-x:auto}
- .barcol{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:28px;transition:opacity .12s}
+ .barcol{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:28px;transition:opacity .12s;cursor:pointer}
+ .barcol.pinned .bar{box-shadow:inset 0 0 0 1px rgba(255,255,255,.18),0 0 0 2px #3b82f6}
+ .legrow.pinned{color:#fff;font-weight:700}
+ .legrow.pinned .leglbl::after{content:" ●";color:#3b82f6;font-size:9px}
  #teamTable tr{transition:opacity .12s}
  .barval{font-size:10px;color:#9aa4b2;margin-bottom:3px}
  .bar{width:34px;border-radius:4px 4px 0 0;position:relative;overflow:hidden;
@@ -251,6 +254,7 @@ function layoutLogos(){
       layer.appendChild(c);
     }
   }
+  applyHL();
 }
 // One tooltip for the whole cluster (all tied teams), placed above the fanned
 // row so it never intersects the logos.
@@ -273,19 +277,24 @@ function buildLegend(){
     r.addEventListener('mouseleave',()=>highlight(null));
   });
 }
-function highlight(team){
-  Plotly.restyle('chart',{opacity:TEAMS.map(t=>team?(t===team?0.95:0.05):0.3)});
+const PINNED=new Set(); let HOVER=null;
+function _active(){const s=new Set(PINNED); if(HOVER)s.add(HOVER); return s;}
+function applyHL(){
+  const s=_active(), on=s.size>0;
+  Plotly.restyle('chart',{opacity:TEAMS.map(t=>on?(s.has(t)?0.95:0.05):0.3)});
   document.querySelectorAll('#logolayer .dot').forEach(d=>{
-    d.style.opacity = team ? (d.dataset.team===team?'1':'0.12') : '';
-  });
+    d.style.opacity = on?(s.has(d.dataset.team)?'1':'0.12'):'';});
   document.querySelectorAll('#bars .barcol').forEach(b=>{
-    b.style.opacity = team ? (b.dataset.team===team?'1':'0.22') : '';
-  });
+    b.style.opacity = on?(s.has(b.dataset.team)?'1':'0.22'):'';
+    b.classList.toggle('pinned',PINNED.has(b.dataset.team));});
   document.querySelectorAll('#teamTable tr[data-team]').forEach(r=>{
-    r.style.opacity = team ? (r.dataset.team===team?'1':'0.3') : '';
-    r.style.background = (team && r.dataset.team===team) ? 'rgba(59,130,246,.16)' : '';
-  });
+    const sel=s.has(r.dataset.team);
+    r.style.opacity = on?(sel?'1':'0.3'):'';
+    r.style.background = sel?'rgba(59,130,246,.16)':'';});
+  document.querySelectorAll('.legrow').forEach(r=>r.classList.toggle('pinned',PINNED.has(r.dataset.team)));
 }
+function highlight(team){HOVER=team;applyHL();}              // transient (legend hover)
+function togglePin(team){PINNED.has(team)?PINNED.delete(team):PINNED.add(team);applyHL();}  // persistent
 
 function renderBars(season){
   const j=SEASONS.indexOf(season);
@@ -301,6 +310,7 @@ function renderBars(season){
       '<div class="barlbl">'+r.t+'</div></div>';
   }).join('');
   document.getElementById('barTitle').textContent=season+(season===CUR?' (current)':'')+' — % of vet-years by team (desc)';
+  applyHL();
 }
 function renderTable(){
   let h='<tr><th>Team</th>'+SEASONS.map(s=>'<th>'+s+'</th>').join('')+'</tr>';
@@ -314,6 +324,8 @@ function setMode(m){MODE=m;
   draw();renderBars(CUR);renderTable();}
 let _rz; window.addEventListener('resize',()=>{clearTimeout(_rz);_rz=setTimeout(layoutLogos,250);});
 draw();buildLegend();renderBars(CUR);renderTable();
+document.getElementById('bars').addEventListener('click',e=>{
+  const b=e.target.closest('.barcol'); if(b&&b.dataset.team) togglePin(b.dataset.team);});
 </script>
 </div></body></html>"""
 
