@@ -166,8 +166,7 @@ TEMPLATE = r"""<!doctype html>
  .bar{transition:filter .12s, box-shadow .12s}
  .barcol.lit .bar{filter:brightness(1.4) saturate(1.15);
    box-shadow:inset 0 0 0 1px rgba(255,255,255,.2),0 0 13px 1px rgba(255,255,255,.45)}
- .legrow.pinned{color:#fff;font-weight:700}
- .legrow.pinned .leglbl::after{content:" ●";color:#3b82f6;font-size:9px}
+ .legrow{transition:opacity .12s}
  #teamTable tr{transition:opacity .12s}
  .barval{font-size:10px;color:#9aa4b2;margin-bottom:3px}
  .bar{width:34px;border-radius:4px 4px 0 0;position:relative;overflow:hidden;
@@ -254,6 +253,7 @@ function layoutLogos(){
         const d=document.createElement('div'); d.className='dot'; d.dataset.team=t;
         d.style.background=SECOND[t]||'#fff'; d.style.borderColor=DCOLORS[t]||'#888';
         d.style.setProperty('--off',off+'px');
+        d.addEventListener('click',e=>{e.stopPropagation(); togglePin(t);});
         c.appendChild(d);
       });
       c.addEventListener('mouseenter',()=>{showCluster(arr,season,val(arr[0],j),cx,cy,k*sp);setHoverSeason(season);});
@@ -313,7 +313,7 @@ function applyHL(){
     const sel=s.has(r.dataset.team);
     r.style.opacity = on?(sel?'1':'0.3'):'';
     r.style.background = sel?'rgba(59,130,246,.16)':'';});
-  document.querySelectorAll('.legrow').forEach(r=>r.classList.toggle('pinned',PINNED.has(r.dataset.team)));
+  document.querySelectorAll('.legrow').forEach(r=>{ r.style.opacity = on?(s.has(r.dataset.team)?'1':'0.3'):''; });
 }
 function highlight(team){HOVER=team;applyHL();}              // transient (legend hover)
 function togglePin(team){PINNED.has(team)?PINNED.delete(team):PINNED.add(team);applyHL();}  // persistent
