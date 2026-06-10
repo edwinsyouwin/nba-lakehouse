@@ -200,22 +200,25 @@ let MODE='count';
 function val(t,j){const c=COUNTS[t][j];return MODE==='count'?c:(VETS[j]?+(100*c/VETS[j]).toFixed(1):0);}
 function pctOf(t,j){return VETS[j]?+(100*COUNTS[t][j]/VETS[j]).toFixed(1):0;}
 
+// Dark-page display color: invert near-black primaries (e.g. BKN #000 -> #FFF)
+// so they stay visible on the black background; the "negative" of the color.
+function _lum(h){const v=i=>parseInt(h.slice(i,i+2),16)/255,f=c=>c<=0.03928?c/12.92:Math.pow((c+0.055)/1.055,2.4);
+  return 0.2126*f(v(1))+0.7152*f(v(3))+0.0722*f(v(5));}
+function _neg(h){const n=i=>(255-parseInt(h.slice(i,i+2),16)).toString(16).padStart(2,'0');return '#'+n(1)+n(3)+n(5);}
+function disp(h){h=h||'#888888';return _lum(h)<0.012?_neg(h):h;}
+const DCOLORS={}; TEAMS.forEach(t=>DCOLORS[t]=disp(COLORS[t]));
+
 function lineTraces(){
   return TEAMS.map(t=>({x:SEASONS.map((_,j)=>j),y:SEASONS.map((_,j)=>val(t,j)),name:t,
-    mode:'lines',type:'scatter',opacity:0.3,hoverinfo:'none',line:{color:COLORS[t]||'#888',width:11}}));}
-
-function bindLineHover(){const gd=document.getElementById('chart');
-  if(gd.removeAllListeners){gd.removeAllListeners('plotly_hover');gd.removeAllListeners('plotly_unhover');}
-  gd.on('plotly_hover',e=>{const p=e.points&&e.points[0]; if(p&&p.data)highlight(p.data.name);});
-  gd.on('plotly_unhover',()=>highlight(null));}
+    mode:'lines',type:'scatter',opacity:0.3,hoverinfo:'skip',line:{color:DCOLORS[t],width:11}}));}
 
 function draw(){return Plotly.react('chart',lineTraces(),{
    paper_bgcolor:'#0f1117',plot_bgcolor:'#0f1117',font:{color:'#cbd5e1'},
-   margin:{t:10,r:10,b:40,l:48},hovermode:'closest',showlegend:false,
+   margin:{t:10,r:10,b:40,l:48},hovermode:false,showlegend:false,
    xaxis:{title:'Season',gridcolor:'#232838',tickmode:'array',
           tickvals:SEASONS.map((_,j)=>j),ticktext:SEASONS,range:[-0.5,SEASONS.length-0.5]},
    yaxis:{title:MODE==='count'?'Active vets':'% of season vet-years',gridcolor:'#232838'}
- },{responsive:true}).then(()=>{layoutLogos();bindLineHover();});}
+ },{responsive:true}).then(layoutLogos);}
 
 function layoutLogos(){
   const gd=document.getElementById('chart'), fl=gd&&gd._fullLayout;
@@ -235,11 +238,11 @@ function layoutLogos(){
         const off=(i-(k-1)/2)*sp;
         const im=document.createElement('img'); im.className='lg'; im.src=LOGOS[t]; im.dataset.team=t;
         im.style.setProperty('--off',off+'px');
-        im.addEventListener('mouseenter',()=>{showTip(t,season,val(t,j),cx+off,cy);highlight(t);});
+        im.addEventListener('mouseenter',()=>showTip(t,season,val(t,j),cx+off,cy));
         c.appendChild(im);
       });
       c.addEventListener('mouseenter',()=>renderBars(season));
-      c.addEventListener('mouseleave',()=>{hideTip();highlight(null);renderBars(CUR);});
+      c.addEventListener('mouseleave',()=>{hideTip();renderBars(CUR);});
       layer.appendChild(c);
     }
   }
@@ -254,7 +257,7 @@ function hideTip(){document.getElementById('tip').style.display='none';}
 function buildLegend(){
   const el=document.getElementById('legend');
   el.innerHTML=TEAMS.map(t=>'<span class="legrow" data-team="'+t+'">'+
-    '<span class="legline" style="border-color:'+(COLORS[t]||'#888')+'">'+
+    '<span class="legline" style="border-color:'+DCOLORS[t]+'">'+
     (LOGOS[t]?'<img src="'+LOGOS[t]+'">':'')+'</span><span class="leglbl">'+t+'</span></span>').join('');
   el.querySelectorAll('.legrow').forEach(r=>{
     r.addEventListener('mouseenter',()=>highlight(r.dataset.team));
@@ -273,7 +276,7 @@ function renderBars(season){
   const rows=TEAMS.map(t=>({t,v:pctOf(t,j)})).sort((a,b)=>b.v-a.v);
   const mx=Math.max(...rows.map(r=>r.v),1), H=300;
   document.getElementById('bars').innerHTML=rows.map(r=>{
-    const h=Math.max(8,Math.round(r.v/mx*H)), col=COLORS[r.t]||'#888', logo=LOGOS[r.t];
+    const h=Math.max(8,Math.round(r.v/mx*H)), col=DCOLORS[r.t]||'#888', logo=LOGOS[r.t];
     return '<div class="barcol" title="'+r.t+' '+season+': '+r.v+'%">'+
       '<div class="barval">'+r.v+'%</div>'+
       '<div class="bar" style="height:'+h+'px">'+
