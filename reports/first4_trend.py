@@ -238,19 +238,22 @@ function layoutLogos(){
         const off=(i-(k-1)/2)*sp;
         const im=document.createElement('img'); im.className='lg'; im.src=LOGOS[t]; im.dataset.team=t;
         im.style.setProperty('--off',off+'px');
-        im.addEventListener('mouseenter',()=>showTip(t,season,val(t,j),cx+off,cy));
         c.appendChild(im);
       });
-      c.addEventListener('mouseenter',()=>renderBars(season));
+      c.addEventListener('mouseenter',()=>{showCluster(arr,season,val(arr[0],j),cx,cy,k*sp);renderBars(season);});
       c.addEventListener('mouseleave',()=>{hideTip();renderBars(CUR);});
       layer.appendChild(c);
     }
   }
 }
-function showTip(t,season,v,x,cy){
+// One tooltip for the whole cluster (all tied teams), placed above the fanned
+// row so it never intersects the logos.
+function showCluster(arr,season,v,cx,cy,fanW){
   const tip=document.getElementById('tip'), u=MODE==='pct'?'%':'';
-  tip.innerHTML='<span class="tipteam">'+(LOGOS[t]?'<img src="'+LOGOS[t]+'">':'')+t+'</span> · '+season+': '+v+u;
-  tip.style.left=x+'px'; tip.style.top=(cy-LPX*0.85)+'px'; tip.style.display='block';
+  const items=arr.map(t=>'<span class="tipteam">'+(LOGOS[t]?'<img src="'+LOGOS[t]+'">':'')+t+'</span>').join('');
+  const head=season+' · '+v+u+(arr.length>1?(' · '+arr.length+' teams'):'');
+  tip.innerHTML='<div class="tiphead">'+head+'</div>'+items;
+  tip.style.left=cx+'px'; tip.style.top=(cy-LPX*0.85)+'px'; tip.style.display='block';
 }
 function hideTip(){document.getElementById('tip').style.display='none';}
 
