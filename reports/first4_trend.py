@@ -2,14 +2,18 @@
 "vets" (>=4 completed seasons) to the team where they spent the first 4 years of
 their career.
 
-- Line chart of the per-team trend (Counts <-> % of vet-years toggle, per-point hover)
-- Per-season pool summary (active / vets / below-threshold / vet %)
-- Bar chart: teams ranked desc by % of vet-years, each bar in the team's primary
-  color with its logo as a backdrop. Defaults to the current season; hovering a
-  point in the line chart re-renders the bars for that season.
+- Line chart: thick, low-opacity team-colored bands. Each data point is the team
+  logo (custom DOM overlay). Logos overlap by default; hovering a cluster fans
+  them out horizontally (CSS) and shows a per-logo tooltip placed above the point
+  so it never overlaps the logos.
+- Custom legend: each entry shows the team's logo on its colored line; hovering an
+  entry highlights that line and dims the rest.
+- Bar chart: teams ranked desc by % of vet-years, bars in team color with logo
+  backdrop; follows the line-chart hover season (defaults to current).
+- Counts <-> % of vet-years toggle; per-season pool summary; data table.
 
-NBA team logos are vendored from React-NBA-Logos (ChrisKatsaras, ISC) and
-converted to SVG; see reports/logos/.
+Logos vendored from React-NBA-Logos (ChrisKatsaras, ISC); see reports/logos/.
+Offline-capable: falls back to reports/_cache.json when the warehouse is unavailable.
 """
 
 from __future__ import annotations
@@ -27,8 +31,8 @@ THRESHOLD = 4
 HERE = Path(__file__).parent
 OUT = HERE / "first4_trend.html"
 LOGO_DIR = HERE / "logos"
+CACHE = HERE / "_cache.json"
 
-# Canonical NBA primary brand colors (current 30 franchises), keyed by current abbr.
 COLORS = {
     "ATL": "#E03A3E", "BOS": "#007A33", "BKN": "#000000", "CHA": "#1D1160",
     "CHI": "#CE1141", "CLE": "#860038", "DAL": "#00538C", "DEN": "#0E2240",
@@ -39,8 +43,6 @@ COLORS = {
     "POR": "#E03A3E", "SAC": "#5A2D81", "SAS": "#C4CED4", "TOR": "#CE1141",
     "UTA": "#002B5C", "WAS": "#002B5C",
 }
-
-# Canonical secondary/accent colors (used for the line-chart markers).
 SECONDARY = {
     "ATL": "#C1D32F", "BOS": "#BA9653", "BKN": "#FFFFFF", "CHA": "#00788C",
     "CHI": "#000000", "CLE": "#FDBB30", "DAL": "#B8C4CA", "DEN": "#FEC524",
@@ -65,7 +67,7 @@ def fetch() -> pd.DataFrame:
         return pd.DataFrame(cur.fetchall(), columns=["pid", "season", "team_id", "abbr"])
 
 
-def compute(df: pd.DataFrame):
+def compute(df: pd.DataFrame) -> dict:
     label = df.sort_values("season").groupby("team_id")["abbr"].last()
     df = df.copy()
     df["srank"] = df.groupby("pid")["season"].rank(method="dense").astype(int)
@@ -118,141 +120,183 @@ def logo_uris(teams) -> dict:
     return out
 
 
-HTML = """<!doctype html>
+# Placeholders are replaced (not str.format) so JS braces stay single.
+TEMPLATE = r"""<!doctype html>
 <html><head><meta charset="utf-8"><title>First-4-Years Dev Team — 10yr Trend</title>
 <link rel="icon" href="data:,">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
- body{{font:14px -apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1117;color:#e6e6e6}}
- .wrap{{max-width:1100px;margin:0 auto;padding:24px}}
- h1{{font-size:22px;margin:0 0 4px}} h3{{margin:26px 0 8px}} p.sub{{color:#9aa4b2;margin:0 0 14px}}
- #chart{{height:560px}}
- table{{border-collapse:collapse;width:100%;margin-top:8px;font-size:12px}}
- th,td{{padding:4px 8px;text-align:right;border-bottom:1px solid #232838}} th:first-child,td:first-child{{text-align:left}}
- th{{position:sticky;top:0;background:#161a23;color:#cbd5e1}} tr:hover td{{background:#161a23}}
- .toggle{{margin:6px 0}} .toggle button{{background:#1b2030;color:#cbd5e1;border:1px solid #2a3142;padding:6px 12px;cursor:pointer}}
- .toggle button.on{{background:#3b82f6;color:#fff;border-color:#3b82f6}}
- .summary td.k{{color:#9aa4b2}}
- /* logo-backdrop bar chart */
- #bars{{display:flex;align-items:flex-end;gap:5px;height:360px;padding-top:18px;overflow-x:auto}}
- .barcol{{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:28px}}
- .barval{{font-size:10px;color:#9aa4b2;margin-bottom:3px}}
- .bar{{width:34px;border-radius:4px 4px 0 0;position:relative;overflow:hidden;
-       box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);transition:filter .12s}}
- .bar:hover{{filter:brightness(1.15)}}
- .bar:hover .tint{{opacity:.55}}            /* reveal the logo more on hover */
- .bar .logo{{position:absolute;inset:0;background-position:center;background-repeat:no-repeat;
-             background-size:cover}}
- .bar .tint{{position:absolute;inset:0;opacity:.74;transition:opacity .12s}}
- .barlbl{{font-size:10px;color:#cbd5e1;margin-top:4px;font-weight:600}}
+ body{font:14px -apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1117;color:#e6e6e6}
+ .wrap{max-width:1100px;margin:0 auto;padding:24px}
+ h1{font-size:22px;margin:0 0 4px} h3{margin:26px 0 8px} p.sub{color:#9aa4b2;margin:0 0 14px}
+ #chartwrap{position:relative}
+ #chart{height:560px}
+ #logolayer{position:absolute;inset:0;pointer-events:none;z-index:5}
+ .cluster{position:absolute;height:26px;transform:translate(-50%,-50%);pointer-events:auto}
+ .cluster .lg{position:absolute;left:50%;top:0;width:26px;height:26px;margin-left:-13px;
+   transition:transform .12s, opacity .12s;cursor:pointer;filter:drop-shadow(0 1px 2px rgba(0,0,0,.55))}
+ .cluster:hover .lg{transform:translateX(var(--off))}
+ .cluster .lg:hover{transform:translateX(var(--off)) scale(1.22);z-index:7}
+ #tip{position:absolute;pointer-events:none;background:#161a23;border:1px solid #2a3142;border-radius:6px;
+   padding:6px 9px;font-size:12px;color:#e6e6e6;transform:translate(-50%,-100%);max-width:280px;
+   display:none;z-index:60;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+ #tip .tiphead{font-weight:700;margin-bottom:4px;color:#9aa4b2}
+ #tip .tipteam{display:inline-flex;align-items:center;gap:3px;margin:2px 7px 2px 0;font-weight:600}
+ #tip .tipteam img{width:15px;height:15px}
+ #legend{display:flex;flex-wrap:wrap;gap:7px 16px;margin-top:14px}
+ .legrow{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#cbd5e1;opacity:.92}
+ .legrow:hover{opacity:1}
+ .legline{position:relative;display:inline-block;width:48px;border-top:3px solid;height:0}
+ .legline img{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:18px;height:18px}
+ .leglbl{font-weight:600}
+ .toggle{margin:6px 0} .toggle button{background:#1b2030;color:#cbd5e1;border:1px solid #2a3142;padding:6px 12px;cursor:pointer}
+ .toggle button.on{background:#3b82f6;color:#fff;border-color:#3b82f6}
+ table{border-collapse:collapse;width:100%;margin-top:8px;font-size:12px}
+ th,td{padding:4px 8px;text-align:right;border-bottom:1px solid #232838} th:first-child,td:first-child{text-align:left}
+ th{position:sticky;top:0;background:#161a23;color:#cbd5e1} tr:hover td{background:#161a23}
+ .summary td.k{color:#9aa4b2}
+ #bars{display:flex;align-items:flex-end;gap:5px;height:360px;padding-top:18px;overflow-x:auto}
+ .barcol{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;flex:1;min-width:28px}
+ .barval{font-size:10px;color:#9aa4b2;margin-bottom:3px}
+ .bar{width:34px;border-radius:4px 4px 0 0;position:relative;overflow:hidden;
+   box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);transition:filter .12s}
+ .bar:hover{filter:brightness(1.15)} .bar:hover .tint{opacity:.55}
+ .bar .logo{position:absolute;inset:0;background-position:center;background-repeat:no-repeat;background-size:cover}
+ .bar .tint{position:absolute;inset:0;opacity:.74;transition:opacity .12s}
+ .barlbl{font-size:10px;color:#cbd5e1;margin-top:4px;font-weight:600}
 </style></head><body><div class="wrap">
 <h1>Where the league grew up — first-4-years development team</h1>
 <p class="sub">Each season's active "vets" (≥4 completed seasons) attributed to the team where they spent the
-first 4 years of their career. Click legend entries to toggle teams.</p>
+first 4 years of their career. Hover a cluster to fan logos apart; hover a legend entry to isolate a team.</p>
 
 <div class="toggle">
   <button id="bCount" class="on" onclick="setMode('count')">Counts</button>
   <button id="bPct" onclick="setMode('pct')">% of vet-years</button>
 </div>
-<div id="chart"></div>
+<div id="chartwrap"><div id="chart"></div><div id="logolayer"></div><div id="tip"></div></div>
+<div id="legend"></div>
 
 <h3 id="barTitle">% of vet-years by team (desc)</h3>
-<p class="sub">Current season by default; hover a point in the line chart to see that season. Bars use each team's
-primary color with its logo as a backdrop.</p>
+<p class="sub">Current season by default; hover a cluster in the line chart to see that season.</p>
 <div id="bars"></div>
 
 <h3>Per-season player pool</h3>
 <table class="summary">
- <tr><th>Metric</th>{summary_head}</tr>
- <tr><td class="k">Active players</td>{row_active}</tr>
- <tr><td class="k">Vets (≥4 seasons)</td>{row_vets}</tr>
- <tr><td class="k">Below threshold</td>{row_below}</tr>
- <tr><td class="k">Vet %</td>{row_vetpct}</tr>
+ <tr><th>Metric</th>__SUMMARY_HEAD__</tr>
+ <tr><td class="k">Active players</td>__ROW_ACTIVE__</tr>
+ <tr><td class="k">Vets (≥4 seasons)</td>__ROW_VETS__</tr>
+ <tr><td class="k">Below threshold</td>__ROW_BELOW__</tr>
+ <tr><td class="k">Vet %</td>__ROW_VETPCT__</tr>
 </table>
 
 <h3 id="tblTitle">Vets attributed, by team × season (counts)</h3>
 <table id="teamTable"></table>
 
 <script>
-const SEASONS={seasons}, TEAMS={teams}, COUNTS={counts}, VETS={vets}, COLORS={colors}, SECOND={second}, LOGOS={logos};
-const CUR=SEASONS[SEASONS.length-1];
+const SEASONS=__SEASONS__, TEAMS=__TEAMS__, COUNTS=__COUNTS__, VETS=__VETS__,
+      COLORS=__COLORS__, SECOND=__SECOND__, LOGOS=__LOGOS__;
+const CUR=SEASONS[SEASONS.length-1], LPX=26;
 let MODE='count';
-function val(t,j){{const c=COUNTS[t][j];return MODE==='count'?c:(VETS[j]?+(100*c/VETS[j]).toFixed(1):0);}}
-function pctOf(t,j){{return VETS[j]?+(100*COUNTS[t][j]/VETS[j]).toFixed(1):0;}}
-const LPX=26;  // logo size in pixels
-function lineTraces(){{const u=MODE==='pct'?'%':'';
-  return TEAMS.map(t=>({{x:SEASONS.map((_,j)=>j),y:SEASONS.map((_,j)=>val(t,j)),name:t,
-    mode:'lines',type:'scatter',customdata:SEASONS,opacity:0.32,
-    line:{{color:COLORS[t]||'#888',width:11}},
-    hovertemplate:'<b>'+t+'</b><br>%{{customdata}}: %{{y}}'+u+'<extra></extra>'}}));}}
-function buildImages(fan){{   // fan = {{j, y}} cluster to fan out, or null
-  const gd=document.getElementById('chart'); const fl=gd&&gd._fullLayout;
-  if(!fl||!fl._size) return [];
-  const sz=fl._size, xr=fl.xaxis.range, yr=fl.yaxis.range;
-  const sizex=LPX*(xr[1]-xr[0])/sz.w, sizey=LPX*(yr[1]-yr[0])/sz.h;
-  const dx=(LPX+2)*(xr[1]-xr[0])/sz.w;   // fan spacing (x units)
-  const imgs=[];
-  for(let j=0;j<SEASONS.length;j++){{
-    const groups={{}};
-    for(const t of TEAMS){{const y=val(t,j); (groups[y]=groups[y]||[]).push(t);}}
-    for(const y in groups){{
+function val(t,j){const c=COUNTS[t][j];return MODE==='count'?c:(VETS[j]?+(100*c/VETS[j]).toFixed(1):0);}
+function pctOf(t,j){return VETS[j]?+(100*COUNTS[t][j]/VETS[j]).toFixed(1):0;}
+
+function lineTraces(){
+  return TEAMS.map(t=>({x:SEASONS.map((_,j)=>j),y:SEASONS.map((_,j)=>val(t,j)),name:t,
+    mode:'lines',type:'scatter',opacity:0.3,hoverinfo:'none',line:{color:COLORS[t]||'#888',width:11}}));}
+
+function bindLineHover(){const gd=document.getElementById('chart');
+  if(gd.removeAllListeners){gd.removeAllListeners('plotly_hover');gd.removeAllListeners('plotly_unhover');}
+  gd.on('plotly_hover',e=>{const p=e.points&&e.points[0]; if(p&&p.data)highlight(p.data.name);});
+  gd.on('plotly_unhover',()=>highlight(null));}
+
+function draw(){return Plotly.react('chart',lineTraces(),{
+   paper_bgcolor:'#0f1117',plot_bgcolor:'#0f1117',font:{color:'#cbd5e1'},
+   margin:{t:10,r:10,b:40,l:48},hovermode:'closest',showlegend:false,
+   xaxis:{title:'Season',gridcolor:'#232838',tickmode:'array',
+          tickvals:SEASONS.map((_,j)=>j),ticktext:SEASONS,range:[-0.5,SEASONS.length-0.5]},
+   yaxis:{title:MODE==='count'?'Active vets':'% of season vet-years',gridcolor:'#232838'}
+ },{responsive:true}).then(()=>{layoutLogos();bindLineHover();});}
+
+function layoutLogos(){
+  const gd=document.getElementById('chart'), fl=gd&&gd._fullLayout;
+  if(!fl||!fl._size) return;
+  const xa=fl.xaxis, ya=fl.yaxis, sp=LPX+2, layer=document.getElementById('logolayer');
+  layer.innerHTML='';
+  for(let j=0;j<SEASONS.length;j++){
+    const groups={};
+    for(const t of TEAMS){const y=val(t,j);(groups[y]=groups[y]||[]).push(t);}
+    for(const y in groups){
       const arr=groups[y], k=arr.length;
-      const fanned = fan && fan.j===j && Math.abs((+y)-fan.y)<1e-9 && k>1;
-      arr.forEach((t,i)=>{{ if(!LOGOS[t]) return;
-        const off = fanned ? (i-(k-1)/2)*dx : 0;   // overlap unless hovered
-        imgs.push({{source:LOGOS[t],xref:'x',yref:'y',x:j+off,y:+y,
-          sizex,sizey,xanchor:'center',yanchor:'middle',layer:'above',sizing:'contain'}});
-      }});
-    }}
-  }}
-  return imgs;
-}}
-function placeLogos(fan){{ Plotly.relayout('chart',{{images:buildImages(fan)}}); }}
-function draw(){{return Plotly.react('chart',lineTraces(),{{
-   paper_bgcolor:'#0f1117',plot_bgcolor:'#0f1117',font:{{color:'#cbd5e1'}},
-   margin:{{t:10,r:10,b:40,l:48}},hovermode:'closest',
-   xaxis:{{title:'Season',gridcolor:'#232838',tickmode:'array',
-           tickvals:SEASONS.map((_,j)=>j),ticktext:SEASONS,range:[-0.5,SEASONS.length-0.5]}},
-   yaxis:{{title:MODE==='count'?'Active vets':'% of season vet-years',gridcolor:'#232838'}},
-   legend:{{orientation:'h',y:-0.18}}}},{{responsive:true}}).then(()=>{{bindHover();placeLogos();}});}}
-function renderBars(season){{
+      const cx=xa._offset+xa.l2p(j), cy=ya._offset+ya.l2p(+y);
+      const c=document.createElement('div'); c.className='cluster';
+      c.style.left=cx+'px'; c.style.top=cy+'px'; c.style.width=Math.max(LPX,k*sp)+'px';
+      const season=SEASONS[j];
+      arr.forEach((t,i)=>{ if(!LOGOS[t]) return;
+        const off=(i-(k-1)/2)*sp;
+        const im=document.createElement('img'); im.className='lg'; im.src=LOGOS[t]; im.dataset.team=t;
+        im.style.setProperty('--off',off+'px');
+        im.addEventListener('mouseenter',()=>{showTip(t,season,val(t,j),cx+off,cy);highlight(t);});
+        c.appendChild(im);
+      });
+      c.addEventListener('mouseenter',()=>renderBars(season));
+      c.addEventListener('mouseleave',()=>{hideTip();highlight(null);renderBars(CUR);});
+      layer.appendChild(c);
+    }
+  }
+}
+function showTip(t,season,v,x,cy){
+  const tip=document.getElementById('tip'), u=MODE==='pct'?'%':'';
+  tip.innerHTML='<span class="tipteam">'+(LOGOS[t]?'<img src="'+LOGOS[t]+'">':'')+t+'</span> · '+season+': '+v+u;
+  tip.style.left=x+'px'; tip.style.top=(cy-LPX*0.85)+'px'; tip.style.display='block';
+}
+function hideTip(){document.getElementById('tip').style.display='none';}
+
+function buildLegend(){
+  const el=document.getElementById('legend');
+  el.innerHTML=TEAMS.map(t=>'<span class="legrow" data-team="'+t+'">'+
+    '<span class="legline" style="border-color:'+(COLORS[t]||'#888')+'">'+
+    (LOGOS[t]?'<img src="'+LOGOS[t]+'">':'')+'</span><span class="leglbl">'+t+'</span></span>').join('');
+  el.querySelectorAll('.legrow').forEach(r=>{
+    r.addEventListener('mouseenter',()=>highlight(r.dataset.team));
+    r.addEventListener('mouseleave',()=>highlight(null));
+  });
+}
+function highlight(team){
+  Plotly.restyle('chart',{opacity:TEAMS.map(t=>team?(t===team?0.95:0.05):0.3)});
+  document.querySelectorAll('#logolayer .lg').forEach(im=>{
+    im.style.opacity = team ? (im.dataset.team===team?'1':'0.08') : '';
+  });
+}
+
+function renderBars(season){
   const j=SEASONS.indexOf(season);
-  const rows=TEAMS.map(t=>({{t,v:pctOf(t,j)}})).sort((a,b)=>b.v-a.v);
+  const rows=TEAMS.map(t=>({t,v:pctOf(t,j)})).sort((a,b)=>b.v-a.v);
   const mx=Math.max(...rows.map(r=>r.v),1), H=300;
-  document.getElementById('bars').innerHTML = rows.map(r=>{{
+  document.getElementById('bars').innerHTML=rows.map(r=>{
     const h=Math.max(8,Math.round(r.v/mx*H)), col=COLORS[r.t]||'#888', logo=LOGOS[r.t];
     return '<div class="barcol" title="'+r.t+' '+season+': '+r.v+'%">'+
-           '<div class="barval">'+r.v+'%</div>'+
-           '<div class="bar" style="height:'+h+'px">'+
-           (logo?'<div class="logo" style="background-image:url('+logo+')"></div>':'')+
-           '<div class="tint" style="background:'+col+'"></div>'+
-           '</div>'+
-           '<div class="barlbl">'+r.t+'</div></div>';
-  }}).join('');
+      '<div class="barval">'+r.v+'%</div>'+
+      '<div class="bar" style="height:'+h+'px">'+
+      (logo?'<div class="logo" style="background-image:url('+logo+')"></div>':'')+
+      '<div class="tint" style="background:'+col+'"></div></div>'+
+      '<div class="barlbl">'+r.t+'</div></div>';
+  }).join('');
   document.getElementById('barTitle').textContent=season+(season===CUR?' (current)':'')+' — % of vet-years by team (desc)';
-}}
-function renderTable(){{
+}
+function renderTable(){
   let h='<tr><th>Team</th>'+SEASONS.map(s=>'<th>'+s+'</th>').join('')+'</tr>';
   for(const t of TEAMS) h+='<tr><td>'+t+'</td>'+SEASONS.map((_,j)=>'<td>'+val(t,j)+(MODE==='pct'?'%':'')+'</td>').join('')+'</tr>';
   document.getElementById('teamTable').innerHTML=h;
   document.getElementById('tblTitle').textContent='Vets attributed, by team × season ('+(MODE==='count'?'counts':'% of vet-years')+')';
-}}
-function bindHover(){{const gd=document.getElementById('chart');
-  if(gd.removeAllListeners){{gd.removeAllListeners('plotly_hover');gd.removeAllListeners('plotly_unhover');}}
-  gd.on('plotly_hover',e=>{{const p=e.points&&e.points[0]; if(!p)return;
-    const j=Math.round(p.x); renderBars(p.customdata||SEASONS[j]); placeLogos({{j,y:p.y}});}});
-  gd.on('plotly_unhover',()=>{{renderBars(CUR);placeLogos();}});}}
-let _rz; window.addEventListener('resize',()=>{{clearTimeout(_rz);_rz=setTimeout(placeLogos,250);}});
-function setMode(m){{MODE=m;
+}
+function setMode(m){MODE=m;
   document.getElementById('bCount').classList.toggle('on',m==='count');
   document.getElementById('bPct').classList.toggle('on',m==='pct');
-  draw();renderTable();}}
-draw();renderBars(CUR);renderTable();
+  draw();renderBars(CUR);renderTable();}
+let _rz; window.addEventListener('resize',()=>{clearTimeout(_rz);_rz=setTimeout(layoutLogos,250);});
+draw();buildLegend();renderBars(CUR);renderTable();
 </script>
 </div></body></html>"""
-
-
-CACHE = HERE / "_cache.json"
 
 
 def cells(vals, suffix=""):
@@ -261,18 +305,23 @@ def cells(vals, suffix=""):
 
 def render(data):
     s, teams = data["seasons"], data["teams"]
-    html = HTML.format(
-        seasons=json.dumps(s), teams=json.dumps(teams),
-        counts=json.dumps(data["counts"]), vets=json.dumps(data["vets"]),
-        colors=json.dumps({t: COLORS.get(t, "#888888") for t in teams}),
-        second=json.dumps({t: SECONDARY.get(t, "#FFFFFF") for t in teams}),
-        logos=json.dumps(logo_uris(teams)),
-        summary_head="".join(f"<th>{x}</th>" for x in s),
-        row_active=cells(data["active"]),
-        row_vets=cells(data["vets"]),
-        row_below=cells(data["below"]),
-        row_vetpct=cells(data["vet_pct"], suffix="%"),
-    )
+    repl = {
+        "__SEASONS__": json.dumps(s),
+        "__TEAMS__": json.dumps(teams),
+        "__COUNTS__": json.dumps(data["counts"]),
+        "__VETS__": json.dumps(data["vets"]),
+        "__COLORS__": json.dumps({t: COLORS.get(t, "#888888") for t in teams}),
+        "__SECOND__": json.dumps({t: SECONDARY.get(t, "#FFFFFF") for t in teams}),
+        "__LOGOS__": json.dumps(logo_uris(teams)),
+        "__SUMMARY_HEAD__": "".join(f"<th>{x}</th>" for x in s),
+        "__ROW_ACTIVE__": cells(data["active"]),
+        "__ROW_VETS__": cells(data["vets"]),
+        "__ROW_BELOW__": cells(data["below"]),
+        "__ROW_VETPCT__": cells(data["vet_pct"], suffix="%"),
+    }
+    html = TEMPLATE
+    for k, v in repl.items():
+        html = html.replace(k, v)
     OUT.write_text(html)
     miss = [t for t in teams if t not in logo_uris(teams)]
     print(f"wrote {OUT} ({len(teams)} teams x {len(s)} seasons); logos missing: {miss or 'none'}")
