@@ -35,4 +35,5 @@ profiles.yml
 reports/*.html
 reports/*.png
 reports/_raw.csv
+reports/_elo_raw.csv
 .playwright-mcp/
